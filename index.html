@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>COVERAGE</title>
+<style>
+  :root{
+    --osd:#f2f5f3;
+    --osd-dim:rgba(242,245,243,.55);
+    --chip:rgba(6,10,9,.5);
+    --ok:#6fe39a;
+    --warn:#ffc24d;
+    --bad:#ff6a5e;
+    --rec:#ff3b30;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:#0b0e10}
+  body{
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    color:var(--osd);
+    -webkit-user-select:none;user-select:none;
+  }
+  canvas{display:block}
+
+  .chip{
+    position:fixed;
+    background:var(--chip);
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:3px;
+    padding:8px 12px;
+    font-size:12px;
+    letter-spacing:.08em;
+    text-shadow:0 1px 2px rgba(0,0,0,.8);
+    z-index:5;
+  }
+
+  /* coverage readout */
+  #covChip{top:14px;left:14px;line-height:1.7}
+  #covMain{font-size:22px;letter-spacing:.06em}
+  #covMain b{font-weight:700}
+  #covMain b.pass{color:var(--ok)}
+  #covSub,#covBudget{color:var(--osd-dim);font-size:11px}
+  #covZones{font-size:11px;margin-top:4px;border-top:1px solid rgba(255,255,255,.12);padding-top:4px}
+  #covZones .z{display:block}
+  #covZones .ok{color:var(--ok)}
+  #covZones .bad{color:var(--bad)}
+
+  /* rec indicator */
+  #recChip{top:14px;right:14px;display:flex;align-items:center;gap:8px}
+  #recDot{width:9px;height:9px;border-radius:50%;background:var(--rec);animation:blink 1.4s steps(1) infinite}
+  @keyframes blink{50%{opacity:.15}}
+  @media (prefers-reduced-motion:reduce){#recDot{animation:none}}
+
+  /* crosshair */
+  #cross{
+    position:fixed;left:50%;top:50%;width:6px;height:6px;
+    margin:-3px 0 0 -3px;border-radius:50%;
+    background:var(--osd);
+    box-shadow:0 0 0 1.5px rgba(0,0,0,.65);
+    z-index:5;pointer-events:none;
+  }
+
+  /* hotbar */
+  #hotbar{
+    position:fixed;left:50%;bottom:16px;transform:translateX(-50%);
+    display:flex;gap:7px;z-index:5;
+  }
+  .slot{
+    width:94px;
+    background:var(--chip);
+    border:1px solid rgba(255,255,255,.18);
+    border-radius:3px;
+    padding:6px 8px 7px;
+    text-shadow:0 1px 2px rgba(0,0,0,.8);
+    cursor:pointer;
+  }
+  .slot .num{font-size:9.5px;color:var(--osd-dim)}
+  .slot .nm{font-size:12px;letter-spacing:.08em;margin:2px 0 3px}
+  .slot .meta{font-size:9px;color:var(--osd-dim);letter-spacing:.04em;line-height:1.5}
+  .slot .cost{font-size:10px;color:var(--osd);margin-top:2px}
+  .slot.sel{border-color:var(--osd);background:rgba(255,255,255,.10)}
+  .slot.sel .nm{color:#fff}
+
+  /* hints */
+  #hints{bottom:16px;left:14px;font-size:10.5px;color:var(--osd-dim);line-height:1.8;letter-spacing:.06em}
+  #hints b{color:var(--osd);font-weight:600}
+
+  /* mount status under crosshair */
+  #aimMsg{
+    position:fixed;left:50%;top:calc(50% + 26px);transform:translateX(-50%);
+    font-size:11px;letter-spacing:.12em;text-shadow:0 1px 2px rgba(0,0,0,.9);
+    z-index:5;pointer-events:none;white-space:nowrap;
+  }
+  #aimMsg.ok{color:var(--ok)}
+  #aimMsg.bad{color:var(--bad)}
+
+  /* start / pause overlay */
+  #overlay{
+    position:fixed;inset:0;z-index:10;
+    background:rgba(7,10,12,.85);
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;
+  }
+  #overlay .panel{max-width:620px;padding:24px;text-align:center}
+  #overlay h1{
+    font-size:42px;font-weight:700;letter-spacing:.42em;margin:0 0 4px;
+    text-indent:.42em;
+  }
+  #overlay .tag{color:var(--osd-dim);font-size:12px;letter-spacing:.18em;margin-bottom:14px}
+  #overlay .brief{
+    color:var(--osd);font-size:12px;letter-spacing:.06em;line-height:1.7;
+    max-width:480px;margin:0 auto 22px;
+  }
+  #overlay .ctl{
+    display:grid;grid-template-columns:auto auto;gap:5px 18px;
+    justify-content:center;text-align:left;
+    font-size:11.5px;letter-spacing:.06em;color:var(--osd-dim);
+    margin-bottom:24px;
+  }
+  #overlay .ctl b{color:var(--osd);font-weight:600;text-align:right}
+  #overlay .go{font-size:13px;letter-spacing:.2em;color:var(--ok)}
+  #overlay .note{margin-top:16px;font-size:10px;color:var(--osd-dim);letter-spacing:.08em}
+</style>
+</head>
+<body>
+
+<div id="covChip" class="chip">
+  <div id="covMain"><b id="covPct">0.0%</b> <span style="font-size:11px;color:var(--osd-dim)">/ TARGET 80%</span></div>
+  <div id="covSub">INSIDE 0% &middot; OUTSIDE 0% &middot; CAMS 0</div>
+  <div id="covBudget"></div>
+  <div id="covZones"></div>
+</div>
+
+<div id="recChip" class="chip"><span id="recDot"></span><span style="font-size:11px;letter-spacing:.2em">REC</span></div>
+
+<div id="cross"></div>
+<div id="aimMsg"></div>
+
+<div id="hotbar"></div>
+
+<div id="hints" class="chip">
+  <b>LMB</b> place &nbsp; <b>E</b> remove &nbsp; <b>SCROLL</b> pan aim &nbsp; <b>SHIFT+SCROLL</b> tilt<br>
+  <b>F</b> FOV cones &nbsp; <b>G</b> coverage dots &nbsp; <b>R</b> roof &nbsp; <b>1-6</b> camera &nbsp; <b>ESC</b> menu
+</div>
+
+<div id="overlay">
+  <div class="panel">
+    <h1>COVERAGE</h1>
+    <div class="tag">CCTV INSTALLATION SIMULATOR &mdash; FOUNDATION BUILD</div>
+    <div class="brief">
+      Reach 80% coverage inside and out, within the &pound;1,500 budget.
+      The vehicle gate needs an ANPR camera. The refuse store and the
+      flammable goods area need thermal cameras. Wall mounts must be
+      2m or higher.
+    </div>
+    <div class="ctl">
+      <b>WASD</b><span>move</span>
+      <b>Mouse</b><span>look</span>
+      <b>1 - 6</b><span>select camera type</span>
+      <b>Scroll</b><span>pan the camera's aim before placing</span>
+      <b>Shift + Scroll</b><span>tilt the camera's aim</span>
+      <b>Left click</b><span>place camera on highlighted surface</span>
+      <b>E</b><span>remove camera you are looking at</span>
+      <b>F / G / R</b><span>toggle FOV cones / coverage dots / roof</span>
+    </div>
+    <div class="go">CLICK TO START</div>
+    <div class="note">Desktop controls only in this build. Touch input comes later.</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+
+/* =========================================================
+   COVERAGE - foundation build v2
+   Single file. Three.js r128. Primitive geometry only.
+   Systems: player controller, building, placement with
+   aim controls, budget, requirement zones, coverage
+   solver, HUD.
+   ========================================================= */
+
+/* ---------------- config ---------------- */
+
+const D2R = THREE.MathUtils.degToRad;
+const clamp = THREE.MathUtils.clamp;
+
+const CAM_TYPES = [
+  { id:'bullet',  name:'BULLET',  mount:['wall'],           fov:60,  range:12, cost:80,  color:0x4db8ff },
+  { id:'dome',    name:'DOME',    mount:['wall','ceiling'], fov:90,  range:9,  cost:100, color:0xffd24d },
+  { id:'turret',  name:'TURRET',  mount:['wall','ceiling'], fov:100, range:8,  cost:120, color:0xb98cff },
+  { id:'fisheye', name:'FISHEYE', mount:['ceiling'],        fov:360, range:5,  cost:180, color:0x7dff9e },
+  { id:'anpr',    name:'ANPR',    mount:['wall'],           fov:25,  range:15, cost:350, color:0xffa54d },
+  { id:'thermal', name:'THERMAL', mount:['wall','ceiling'], fov:70,  range:10, cost:500, color:0xff5e8a },
+];
+CAM_TYPES.forEach(t => t.cosHalf = Math.cos(D2R(Math.min(t.fov, 180) / 2)));
+
+const BUDGET       = 1500;
+const TARGET_PCT   = 80;
+const EYE_HEIGHT   = 1.7;
+const MOVE_SPEED   = 4.5;
+const PLAYER_RAD   = 0.3;
+const REACH        = 8;      // max placement / removal distance
+const MIN_MOUNT_Y  = 2.0;    // wall mounts must be this high or above
+const SAMPLE_Y     = 1.0;    // height coverage is measured at
+const PAN_LIMIT    = D2R(75);            // wall pan, either side of the normal
+const TILT_W_MIN   = D2R(5),  TILT_W_MAX = D2R(50);  // wall tilt range
+const TILT_C_MAX   = D2R(55);            // ceiling tilt off vertical
+const AIM_STEP     = D2R(3);             // per scroll notch
+
+/* ---------------- renderer / scene ---------------- */
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x97a8b4);
+scene.fog = new THREE.Fog(0x97a8b4, 45, 95);
+
+const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.05, 120);
+camera.rotation.order = 'YXZ';
+
+scene.add(new THREE.HemisphereLight(0xd7e6f2, 0x57534c, 0.95));
+const sun = new THREE.DirectionalLight(0xfff2dd, 0.7);
+sun.position.set(12, 22, 7);
+scene.add(sun);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* ---------------- shared materials / geometry ---------------- */
+
+const matWall   = new THREE.MeshLambertMaterial({ color:0xcfc9bd });
+const matRoof   = new THREE.MeshLambertMaterial({ color:0x4a5258 });
+const matFloor  = new THREE.MeshLambertMaterial({ color:0x8d8f8b });
+const matGround = new THREE.MeshLambertMaterial({ color:0x77836b });
+const matCrate  = new THREE.MeshLambertMaterial({ color:0x8a6f4d });
+const matBin    = new THREE.MeshLambertMaterial({ color:0x3f5a45 });
+const matPost   = new THREE.MeshLambertMaterial({ color:0x5a6168 });
+const matBodyA  = new THREE.MeshLambertMaterial({ color:0xe9eaec });
+const matBodyB  = new THREE.MeshLambertMaterial({ color:0x23262a });
+
+const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+
+/* ---------------- world ---------------- */
+
+const colliders     = []; // expanded XZ rects for player collision
+const occluders     = []; // meshes that block camera sightlines
+const placeSurfaces = []; // meshes cameras can be mounted on
+
+function addBox(cx, cy, cz, sx, sy, sz, mat, opt = {}) {
+  const m = new THREE.Mesh(boxGeo, mat);
+  m.scale.set(sx, sy, sz);
+  m.position.set(cx, cy, cz);
+  scene.add(m);
+  if (opt.collide) colliders.push({
+    minX: cx - sx/2 - PLAYER_RAD, maxX: cx + sx/2 + PLAYER_RAD,
+    minZ: cz - sz/2 - PLAYER_RAD, maxZ: cz + sz/2 + PLAYER_RAD,
+    rawMinX: cx - sx/2, rawMaxX: cx + sx/2,
+    rawMinZ: cz - sz/2, rawMaxZ: cz + sz/2,
+  });
+  if (opt.occlude) occluders.push(m);
+  if (opt.place)   placeSurfaces.push(m);
+  return m;
+}
+
+// Building: 12 x 8 m footprint, 3 m walls, one internal divider.
+const T = 0.3, H = 3;
+const ALL = { collide:1, occlude:1, place:1 };
+
+addBox(    0, H/2, -4, 12.6, H,    T, matWall, ALL);              // north
+addBox(-4.95, H/2,  4,  2.7, H,    T, matWall, ALL);              // south, left of door
+addBox( 1.95, H/2,  4,  8.7, H,    T, matWall, ALL);              // south, right of door (door gap at x ~ -3)
+addBox(   -6, H/2,  0,    T, H,  7.7, matWall, ALL);              // west
+addBox(    6, H/2,  0,    T, H,  7.7, matWall, ALL);              // east
+addBox(    1, H/2, -1.625, T, H, 4.45, matWall, ALL);             // internal wall, below doorway
+addBox(    1, H/2,  2.825, T, H, 2.05, matWall, ALL);             // internal wall, above doorway
+
+const roof = addBox(0, 3.125, 0, 12.6, 0.25, 8.6, matRoof, { occlude:1, place:1 });
+
+addBox(0, -0.05, 0, 12.6, 0.1, 8.6, matFloor, {});                // interior slab
+addBox(0, -0.11, 0, 34, 0.1, 28, matGround, {});                  // ground
+
+// Outdoor obstacles
+addBox( 10.5, 0.6,  3,   1.2, 1.2, 1.2, matCrate, ALL);
+addBox(   -9, 0.5, -5.5, 1.0, 1.0, 1.0, matCrate, ALL);
+
+// Refuse store: bins against the outside of the east wall
+addBox( 7.9, 0.5, -0.6, 0.8, 1.0, 0.8, matBin, ALL);
+addBox( 7.9, 0.5,  0.6, 0.8, 1.0, 0.8, matBin, ALL);
+
+// Flammable goods crate inside the east room
+addBox( 4.6, 0.5, -2.6, 1.0, 1.0, 1.0, matCrate, ALL);
+
+// Vehicle gate posts at the south edge
+addBox( 2.95, 0.6, 11, 0.25, 1.2, 0.25, matPost, ALL);
+addBox( 6.05, 0.6, 11, 0.25, 1.2, 0.25, matPost, ALL);
+
+/* ---------------- player ---------------- */
+
+const player = { x:-3, z:9, yaw:0, pitch:0 };
+const keys = {};
+let locked = false;
+
+function blockedAt(x, z) {
+  for (const c of colliders)
+    if (x > c.minX && x < c.maxX && z > c.minZ && z < c.maxZ) return true;
+  return false;
+}
+
+function movePlayer(dt) {
+  let fx = 0, fz = 0;
+  if (keys['KeyW']) fz += 1;
+  if (keys['KeyS']) fz -= 1;
+  if (keys['KeyA']) fx -= 1;
+  if (keys['KeyD']) fx += 1;
+  if (!fx && !fz) return;
+  const len = Math.hypot(fx, fz); fx /= len; fz /= len;
+
+  const sin = Math.sin(player.yaw), cos = Math.cos(player.yaw);
+  const dx = (fz * -sin + fx *  cos) * MOVE_SPEED * dt;
+  const dz = (fz * -cos + fx * -sin) * MOVE_SPEED * dt;
+
+  let nx = player.x + dx;
+  if (!blockedAt(nx, player.z)) player.x = nx;
+  let nz = player.z + dz;
+  if (!blockedAt(player.x, nz)) player.z = nz;
+
+  player.x = clamp(player.x, -16.5, 16.5);
+  player.z = clamp(player.z, -13.5, 13.5);
+}
+
+/* ---------------- pointer lock ---------------- */
+
+const overlay = document.getElementById('overlay');
+overlay.addEventListener('click', () => renderer.domElement.requestPointerLock());
+
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === renderer.domElement;
+  overlay.style.display = locked ? 'none' : 'flex';
+});
+
+document.addEventListener('mousemove', e => {
+  if (!locked) return;
+  player.yaw   -= e.movementX * 0.0022;
+  player.pitch -= e.movementY * 0.0022;
+  player.pitch  = clamp(player.pitch, -1.5, 1.5);
+});
+
+/* ---------------- camera body / FOV meshes ---------------- */
+/* Bodies are modelled along +Z (out of the mount surface) and
+   rotated into place with a single quaternion. */
+
+const GEO = {
+  plate: new THREE.BoxGeometry(0.16, 0.16, 0.03),
+  lens:  new THREE.SphereGeometry(0.022, 8, 6),
+  bulletBody: (() => { const g = new THREE.CylinderGeometry(0.045, 0.06, 0.26, 10); g.rotateX(Math.PI/2); return g; })(),
+  domeBase:   (() => { const g = new THREE.CylinderGeometry(0.11, 0.11, 0.04, 14);  g.rotateX(Math.PI/2); return g; })(),
+  domeShell:  (() => { const g = new THREE.SphereGeometry(0.10, 12, 8, 0, Math.PI*2, 0, Math.PI/2); g.rotateX(Math.PI/2); return g; })(),
+  turretRing: (() => { const g = new THREE.CylinderGeometry(0.095, 0.095, 0.07, 14); g.rotateX(Math.PI/2); return g; })(),
+  turretBall: new THREE.SphereGeometry(0.07, 10, 8),
+  eyeShell:   (() => { const g = new THREE.SphereGeometry(0.075, 12, 8, 0, Math.PI*2, 0, Math.PI/2); g.rotateX(Math.PI/2); return g; })(),
+  anprBody:   new THREE.BoxGeometry(0.16, 0.12, 0.3),
+  thermBody:  (() => { const g = new THREE.CylinderGeometry(0.055, 0.055, 0.2, 10); g.rotateX(Math.PI/2); return g; })(),
+  thermLens:  new THREE.SphereGeometry(0.032, 8, 6),
+};
+
+function makeBody(type, matOverride) {
+  const g = new THREE.Group();
+  const mA = matOverride || matBodyA;
+  const mB = matOverride || matBodyB;
+  const add = (geo, mat, z) => { const m = new THREE.Mesh(geo, mat); m.position.z = z; g.add(m); };
+  add(GEO.plate, mB, 0.015);
+  if (type.id === 'bullet')       { add(GEO.bulletBody, mA, 0.17);  add(GEO.lens, mB, 0.30); }
+  else if (type.id === 'dome')    { add(GEO.domeBase, mA, 0.035);   add(GEO.domeShell, mB, 0.04); }
+  else if (type.id === 'turret')  { add(GEO.turretRing, mA, 0.05);  add(GEO.turretBall, mB, 0.08); }
+  else if (type.id === 'fisheye') { add(GEO.eyeShell, mB, 0.03); }
+  else if (type.id === 'anpr')    { add(GEO.anprBody, mA, 0.18);    add(GEO.lens, mB, 0.34); }
+  else                            { add(GEO.thermBody, mA, 0.14);   add(GEO.thermLens, mB, 0.25); }
+  return g;
+}
+
+// FOV visualisation geometry, cached per type (apex at origin, extends +Z).
+const fovGeoCache = {};
+function fovGeometry(type) {
+  if (fovGeoCache[type.id]) return fovGeoCache[type.id];
+  let g;
+  if (type.fov >= 180) {
+    g = new THREE.SphereGeometry(type.range, 16, 8, 0, Math.PI*2, Math.PI/2, Math.PI/2);
+    g.rotateX(-Math.PI/2);
+  } else {
+    const r = Math.tan(D2R(type.fov/2)) * type.range;
+    g = new THREE.ConeGeometry(r, type.range, 18, 1, true);
+    g.translate(0, -type.range/2, 0);
+    g.rotateX(-Math.PI/2);
+  }
+  fovGeoCache[type.id] = g;
+  return g;
+}
+
+const fovMatCache = {};
+function fovMaterial(type) {
+  if (!fovMatCache[type.id]) fovMatCache[type.id] = new THREE.MeshBasicMaterial({
+    color:type.color, transparent:true, opacity:0.10,
+    side:THREE.DoubleSide, depthWrite:false,
+  });
+  return fovMatCache[type.id];
+}
+
+/* ---------------- placement ghost + aim ---------------- */
+
+const ghostMat = new THREE.MeshBasicMaterial({ transparent:true, opacity:0.55, depthWrite:false });
+const ghostFovMat = new THREE.MeshBasicMaterial({
+  transparent:true, opacity:0.08, side:THREE.DoubleSide, depthWrite:false,
+});
+
+const ghostRoot = new THREE.Group();
+scene.add(ghostRoot);
+let ghostBody = null, ghostCone = null;
+let ghostValid = false;
+let ghostMount = 'wall';   // last surface type the crosshair hit
+let selected = 0;
+let spent = 0;
+
+// aim state, kept separately for wall and ceiling mounts
+let aimPanW = 0,  aimTiltW = D2R(15);
+let aimPanC = 0,  aimTiltC = 0;
+
+function rebuildGhost() {
+  while (ghostRoot.children.length) ghostRoot.remove(ghostRoot.children[0]);
+  const type = CAM_TYPES[selected];
+  ghostBody = makeBody(type, ghostMat);
+  ghostCone = new THREE.Mesh(fovGeometry(type), ghostFovMat);
+  ghostRoot.add(ghostBody, ghostCone);
+  ghostRoot.visible = false;
+}
+
+const rayAim = new THREE.Raycaster();
+rayAim.far = REACH;
+const _n = new THREE.Vector3();
+const _m3 = new THREE.Matrix3();
+const Z_AXIS = new THREE.Vector3(0, 0, 1);
+const aimMsg = document.getElementById('aimMsg');
+
+let ghostPos = new THREE.Vector3();
+let ghostQuat = new THREE.Quaternion();
+let ghostDir = new THREE.Vector3();
+
+const rdeg = r => Math.round(THREE.MathUtils.radToDeg(r));
+
+function updateGhost() {
+  const type = CAM_TYPES[selected];
+  rayAim.setFromCamera({ x:0, y:0 }, camera);
+  const hit = rayAim.intersectObjects(placeSurfaces, false)[0];
+
+  if (!hit || !hit.face) {
+    ghostRoot.visible = false; ghostValid = false;
+    aimMsg.textContent = ''; return;
+  }
+
+  _n.copy(hit.face.normal).applyMatrix3(_m3.getNormalMatrix(hit.object.matrixWorld)).normalize();
+
+  let mount = null;
+  if (_n.y < -0.7) mount = 'ceiling';
+  else if (Math.abs(_n.y) <= 0.4) mount = 'wall';
+  if (mount) ghostMount = mount;
+
+  const tooLow     = mount === 'wall' && hit.point.y < MIN_MOUNT_Y;
+  const wrongMount = !mount || !type.mount.includes(mount);
+  const overBudget = type.cost > BUDGET - spent;
+  ghostValid = !wrongMount && !tooLow && !overBudget;
+
+  // aim direction
+  let aimTxt = '';
+  if (type.id === 'fisheye') {
+    ghostDir.set(0, -1, 0);
+  } else if (mount === 'ceiling') {
+    const st = Math.sin(aimTiltC), ct = Math.cos(aimTiltC);
+    ghostDir.set(Math.sin(aimPanC) * st, -ct, Math.cos(aimPanC) * st);
+    aimTxt = ' \u00B7 PAN ' + ((rdeg(aimPanC) % 360 + 360) % 360) + '\u00B0 \u00B7 TILT ' + rdeg(aimTiltC) + '\u00B0';
+  } else {
+    const baseYaw = Math.atan2(_n.x, _n.z);
+    const yaw = baseYaw + aimPanW;
+    const ct = Math.cos(aimTiltW), st = Math.sin(aimTiltW);
+    ghostDir.set(Math.sin(yaw) * ct, -st, Math.cos(yaw) * ct);
+    aimTxt = ' \u00B7 PAN ' + (aimPanW >= 0 ? '+' : '') + rdeg(aimPanW) + '\u00B0 \u00B7 TILT ' + rdeg(aimTiltW) + '\u00B0';
+  }
+  ghostQuat.setFromUnitVectors(Z_AXIS, ghostDir);
+  ghostPos.copy(hit.point).addScaledVector(_n, 0.06);
+
+  ghostRoot.position.copy(ghostPos);
+  ghostRoot.quaternion.copy(ghostQuat);
+  ghostRoot.visible = true;
+  ghostCone.visible = ghostValid;
+
+  const col = ghostValid ? 0x6fe39a : 0xff6a5e;
+  ghostMat.color.setHex(col);
+  ghostFovMat.color.setHex(col);
+
+  if (ghostValid) {
+    aimMsg.textContent = 'PLACE: ' + type.name + ' \u00A3' + type.cost + aimTxt;
+    aimMsg.className = 'ok';
+  } else {
+    aimMsg.textContent =
+      !mount      ? 'NO MOUNT SURFACE' :
+      wrongMount  ? 'INVALID SURFACE FOR ' + type.name :
+      tooLow      ? 'MOUNT TOO LOW (MIN ' + MIN_MOUNT_Y + 'M)' :
+                    'OVER BUDGET (\u00A3' + (BUDGET - spent) + ' LEFT)';
+    aimMsg.className = 'bad';
+  }
+}
+
+window.addEventListener('wheel', e => {
+  if (!locked) return;
+  e.preventDefault();
+  const raw = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+  if (!raw) return;
+  const step = Math.sign(raw) * AIM_STEP;
+  const type = CAM_TYPES[selected];
+  if (type.id === 'fisheye') return;
+  if (e.shiftKey) {
+    if (ghostMount === 'ceiling') aimTiltC = clamp(aimTiltC + step, 0, TILT_C_MAX);
+    else                          aimTiltW = clamp(aimTiltW + step, TILT_W_MIN, TILT_W_MAX);
+  } else {
+    if (ghostMount === 'ceiling') aimPanC += step;
+    else                          aimPanW = clamp(aimPanW + step, -PAN_LIMIT, PAN_LIMIT);
+  }
+}, { passive:false });
+
+/* ---------------- placed cameras ---------------- */
+
+const camsRoot = new THREE.Group(); scene.add(camsRoot); // bodies (raycast target for removal)
+const fovRoot  = new THREE.Group(); scene.add(fovRoot);  // FOV cones
+const placed = [];
+let fovVisible = true;
+
+function placeCamera() {
+  if (!ghostValid) return;
+  const type = CAM_TYPES[selected];
+  const body = makeBody(type);
+  body.position.copy(ghostPos);
+  body.quaternion.copy(ghostQuat);
+  camsRoot.add(body);
+
+  const cone = new THREE.Mesh(fovGeometry(type), fovMaterial(type));
+  cone.position.copy(ghostPos);
+  cone.quaternion.copy(ghostQuat);
+  cone.visible = fovVisible;
+  fovRoot.add(cone);
+
+  placed.push({
+    type, body, cone,
+    origin: ghostPos.clone().addScaledVector(ghostDir, 0.08),
+    dir: ghostDir.clone(),
+  });
+  spent += type.cost;
+  recompute();
+}
+
+function removeCamera() {
+  rayAim.setFromCamera({ x:0, y:0 }, camera);
+  const hit = rayAim.intersectObjects(camsRoot.children, true)[0];
+  if (!hit) return;
+  let o = hit.object;
+  while (o.parent && o.parent !== camsRoot) o = o.parent;
+  const i = placed.findIndex(c => c.body === o);
+  if (i < 0) return;
+  spent -= placed[i].type.cost;
+  camsRoot.remove(placed[i].body);
+  fovRoot.remove(placed[i].cone);
+  placed.splice(i, 1);
+  recompute();
+}
+
+/* ---------------- requirement zones ---------------- */
+/* Zones are marked floor areas whose sample points must be covered
+   by a specific camera type. Generic coverage of those points still
+   counts toward the overall %, it just does not satisfy the zone. */
+
+const points = [];
+const zones = [];
+
+function insideAnyCollider(x, z, pad) {
+  for (const c of colliders)
+    if (x > c.rawMinX - pad && x < c.rawMaxX + pad && z > c.rawMinZ - pad && z < c.rawMaxZ + pad) return true;
+  return false;
+}
+
+const zoneFrameMats = {};
+function addZone(label, req, minX, maxX, minZ, maxZ, color, inOut, floorY) {
+  const zone = { label, req, total:0, got:0 };
+  zones.push(zone);
+
+  // tinted floor quad + thin frame
+  if (!zoneFrameMats[color]) zoneFrameMats[color] = {
+    fill:  new THREE.MeshBasicMaterial({ color, transparent:true, opacity:0.10, depthWrite:false, side:THREE.DoubleSide }),
+    frame: new THREE.MeshBasicMaterial({ color }),
+  };
+  const mats = zoneFrameMats[color];
+  const w = maxX - minX, d = maxZ - minZ, cx = (minX + maxX)/2, cz = (minZ + maxZ)/2;
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mats.fill);
+  quad.rotation.x = -Math.PI/2;
+  quad.position.set(cx, floorY, cz);
+  scene.add(quad);
+  const fr = (fx, fz, sx, sz) => {
+    const m = new THREE.Mesh(boxGeo, mats.frame);
+    m.scale.set(sx, 0.05, sz);
+    m.position.set(fx, floorY + 0.01, fz);
+    scene.add(m);
+  };
+  fr(cx, minZ, w + 0.06, 0.06); fr(cx, maxZ, w + 0.06, 0.06);
+  fr(minX, cz, 0.06, d); fr(maxX, cz, 0.06, d);
+
+  // zone sample points
+  for (let x = minX + 0.4; x <= maxX - 0.39; x += 0.8)
+    for (let z = minZ + 0.4; z <= maxZ - 0.39; z += 0.8) {
+      if (insideAnyCollider(x, z, 0.2)) continue;
+      points.push({ pos:new THREE.Vector3(x, SAMPLE_Y, z), zone:inOut, cov:false, covReq:false, req, zoneRef:zone });
+      zone.total++;
+    }
+}
+
+addZone('GATE',   'anpr',    3.4, 5.6,  9.8, 12.2, 0xffa54d, 'out', -0.03);
+addZone('REFUSE', 'thermal', 6.6, 8.6, -1.5,  1.5, 0xff5e8a, 'out', -0.03);
+addZone('STORE',  'thermal', 3.4, 5.6, -3.4, -1.6, 0xff5e8a, 'in',   0.03);
+
+/* ---------------- coverage solver ---------------- */
+/* A grid of sample points at chest height, inside and outside the
+   building. A point is covered when it sits inside any camera's FOV
+   and range, with a clear line of sight. Recomputed only when the
+   camera set changes, never per frame. */
+
+// interior grid (1 m spacing)
+for (let x = -5.5; x <= 5.51; x += 1)
+  for (let z = -3.5; z <= 3.51; z += 1)
+    if (!insideAnyCollider(x, z, 0.2))
+      points.push({ pos:new THREE.Vector3(x, SAMPLE_Y, z), zone:'in', cov:false, covReq:false, req:null, zoneRef:null });
+
+// exterior grid (1.5 m spacing), skipping the building footprint
+for (let x = -13; x <= 13.01; x += 1.5)
+  for (let z = -11; z <= 11.01; z += 1.5) {
+    if (Math.abs(x) < 6.8 && Math.abs(z) < 4.8) continue;
+    if (insideAnyCollider(x, z, 0.2)) continue;
+    points.push({ pos:new THREE.Vector3(x, SAMPLE_Y, z), zone:'out', cov:false, covReq:false, req:null, zoneRef:null });
+  }
+
+const inTotal  = points.filter(p => p.zone === 'in').length;
+const outTotal = points.length - inTotal;
+
+// debug dots
+const ptGeo = new THREE.BufferGeometry();
+const ptPositions = new Float32Array(points.length * 3);
+const ptColors    = new Float32Array(points.length * 3);
+points.forEach((p, i) => p.pos.toArray(ptPositions, i * 3));
+ptGeo.setAttribute('position', new THREE.BufferAttribute(ptPositions, 3));
+ptGeo.setAttribute('color',    new THREE.BufferAttribute(ptColors, 3));
+const ptCloud = new THREE.Points(ptGeo, new THREE.PointsMaterial({
+  size:0.12, vertexColors:true, transparent:true, opacity:0.9, depthWrite:false,
+}));
+scene.add(ptCloud);
+
+const raySight = new THREE.Raycaster();
+raySight.near = 0.05;
+const _v = new THREE.Vector3();
+
+const covPct    = document.getElementById('covPct');
+const covSub    = document.getElementById('covSub');
+const covBudget = document.getElementById('covBudget');
+const covZones  = document.getElementById('covZones');
+
+function recompute() {
+  let inC = 0, outC = 0;
+  zones.forEach(z => z.got = 0);
+
+  for (const p of points) {
+    p.cov = false; p.covReq = false;
+    for (const c of placed) {
+      _v.subVectors(p.pos, c.origin);
+      const d = _v.length();
+      if (d > c.type.range) continue;
+      _v.divideScalar(d);
+      if (_v.dot(c.dir) < c.type.cosHalf) continue;
+      raySight.set(c.origin, _v);
+      raySight.far = Math.max(0, d - 0.12);
+      if (raySight.intersectObjects(occluders, false).length) continue;
+      p.cov = true;
+      if (p.req && c.type.id === p.req) p.covReq = true;
+      if (!p.req || p.covReq) break;
+    }
+    if (p.cov) (p.zone === 'in' ? inC++ : outC++);
+    if (p.covReq) p.zoneRef.got++;
+  }
+
+  points.forEach((p, i) => {
+    const o = i * 3;
+    if (p.req && p.cov && !p.covReq) { ptColors[o] = 1.0;  ptColors[o+1] = 0.76; ptColors[o+2] = 0.25; } // wrong type
+    else if (p.cov)                  { ptColors[o] = 0.25; ptColors[o+1] = 1.0;  ptColors[o+2] = 0.45; }
+    else                             { ptColors[o] = 1.0;  ptColors[o+1] = 0.28; ptColors[o+2] = 0.24; }
+  });
+  ptGeo.attributes.color.needsUpdate = true;
+
+  const total = points.length ? ((inC + outC) / points.length) * 100 : 0;
+  const zonesDone = zones.every(z => z.got === z.total);
+
+  covPct.textContent = total.toFixed(1) + '%';
+  covPct.className = (total >= TARGET_PCT && zonesDone) ? 'pass' : '';
+  covSub.textContent =
+    'INSIDE ' + Math.round((inC / inTotal) * 100) + '% \u00B7 ' +
+    'OUTSIDE ' + Math.round((outC / outTotal) * 100) + '% \u00B7 ' +
+    'CAMS ' + placed.length;
+  covBudget.textContent = 'BUDGET \u00A3' + (BUDGET - spent) + ' / \u00A3' + BUDGET;
+
+  covZones.innerHTML = zones.map(z => {
+    const done = z.got === z.total;
+    return '<span class="z ' + (done ? 'ok' : 'bad') + '">' +
+      (done ? '\u2713 ' : '\u2717 ') + z.label + ' \u00B7 ' + z.req.toUpperCase() +
+      ' (' + z.got + '/' + z.total + ')</span>';
+  }).join('');
+}
+
+/* ---------------- hotbar UI ---------------- */
+
+const hotbar = document.getElementById('hotbar');
+CAM_TYPES.forEach((t, i) => {
+  const el = document.createElement('div');
+  el.className = 'slot';
+  el.innerHTML =
+    '<div class="num">' + (i + 1) + '</div>' +
+    '<div class="nm">' + t.name + '</div>' +
+    '<div class="meta">' + t.mount.map(m => m === 'ceiling' ? 'CEIL' : 'WALL').join('/') +
+    ' \u00B7 ' + (t.fov >= 180 ? '360\u00B0' : t.fov + '\u00B0') + ' \u00B7 ' + t.range + 'm</div>' +
+    '<div class="cost">\u00A3' + t.cost + '</div>';
+  el.addEventListener('click', () => selectSlot(i));
+  hotbar.appendChild(el);
+});
+
+function selectSlot(i) {
+  selected = i;
+  [...hotbar.children].forEach((el, j) => el.classList.toggle('sel', j === selected));
+  rebuildGhost();
+}
+
+/* ---------------- input ---------------- */
+
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (!locked) return;
+  if (e.code.startsWith('Digit')) {
+    const n = +e.code.slice(5) - 1;
+    if (n >= 0 && n < CAM_TYPES.length) selectSlot(n);
+  }
+  else if (e.code === 'KeyE') removeCamera();
+  else if (e.code === 'KeyF') { fovVisible = !fovVisible; placed.forEach(c => c.cone.visible = fovVisible); }
+  else if (e.code === 'KeyG') ptCloud.visible = !ptCloud.visible;
+  else if (e.code === 'KeyR') roof.visible = !roof.visible;
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+document.addEventListener('mousedown', e => {
+  if (locked && e.button === 0) placeCamera();
+});
+
+/* ---------------- main loop ---------------- */
+
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  if (locked) movePlayer(dt);
+
+  camera.position.set(player.x, EYE_HEIGHT, player.z);
+  camera.rotation.y = player.yaw;
+  camera.rotation.x = player.pitch;
+
+  if (locked) updateGhost();
+  else { ghostRoot.visible = false; aimMsg.textContent = ''; }
+
+  renderer.render(scene, camera);
+}
+
+selectSlot(0);
+recompute();
+animate();
+</script>
+</body>
+</html>
