@@ -1,0 +1,1731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>COVERAGE</title>
+<style>
+  :root{
+    --osd:#f2f5f3;
+    --osd-dim:rgba(242,245,243,.55);
+    --chip:rgba(6,10,9,.5);
+    --ok:#6fe39a;
+    --warn:#ffc24d;
+    --bad:#ff6a5e;
+    --rec:#ff3b30;
+    --teal:#16807e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:#0b0e10}
+  body{
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    color:var(--osd);
+    -webkit-user-select:none;user-select:none;
+  }
+  canvas{display:block}
+
+  .chip{
+    position:fixed;
+    background:var(--chip);
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:3px;
+    padding:8px 12px;
+    font-size:12px;
+    letter-spacing:.08em;
+    text-shadow:0 1px 2px rgba(0,0,0,.8);
+    z-index:5;
+  }
+
+  /* coverage readout */
+  #covChip{top:14px;left:14px;line-height:1.7}
+  #covMain{font-size:22px;letter-spacing:.06em}
+  #covMain b{font-weight:700}
+  #covMain b.pass{color:var(--ok)}
+  #covSub,#covBudget{color:var(--osd-dim);font-size:11px}
+  #covZones{font-size:11px;margin-top:4px;border-top:1px solid rgba(255,255,255,.12);padding-top:4px}
+  #covZones .z{display:block}
+  #covZones .ok{color:var(--ok)}
+  #covZones .bad{color:var(--bad)}
+
+  /* stage tracker */
+  #stageChip{top:14px;left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:.12em;color:var(--osd-dim)}
+  #stageChip .sep{margin:0 8px;opacity:.4}
+  #stageChip .done{color:var(--ok)}
+  #stageChip .cur{color:#fff}
+
+  /* rec indicator */
+  #recChip{top:14px;right:14px;display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.2em}
+  #recDot{width:9px;height:9px;border-radius:50%;background:var(--rec);animation:blink 1.4s steps(1) infinite}
+  #recChip .dim{color:var(--osd-dim)}
+  @keyframes blink{50%{opacity:.15}}
+  @media (prefers-reduced-motion:reduce){#recDot,#feedClock .dot{animation:none}}
+
+  /* crosshair */
+  #cross{
+    position:fixed;left:50%;top:50%;width:6px;height:6px;
+    margin:-3px 0 0 -3px;border-radius:50%;
+    background:var(--osd);
+    box-shadow:0 0 0 1.5px rgba(0,0,0,.65);
+    z-index:5;pointer-events:none;
+  }
+
+  /* hotbar */
+  #hotbar{
+    position:fixed;left:50%;bottom:16px;transform:translateX(-50%);
+    display:flex;gap:7px;z-index:5;
+  }
+  .slot{
+    width:92px;
+    background:var(--chip);
+    border:1px solid rgba(255,255,255,.18);
+    border-radius:3px;
+    padding:6px 8px 7px;
+    text-shadow:0 1px 2px rgba(0,0,0,.8);
+    cursor:pointer;
+  }
+  .slot .num{font-size:9.5px;color:var(--osd-dim)}
+  .slot .nm{font-size:11.5px;letter-spacing:.07em;margin:2px 0 3px}
+  .slot .meta{font-size:9px;color:var(--osd-dim);letter-spacing:.04em;line-height:1.5}
+  .slot .cost{font-size:10px;color:var(--osd);margin-top:2px}
+  .slot.sel{border-color:var(--osd);background:rgba(255,255,255,.10)}
+  .slot.sel .nm{color:#fff}
+
+  /* hints */
+  #hints{bottom:16px;left:14px;font-size:10.5px;color:var(--osd-dim);line-height:1.8;letter-spacing:.06em}
+  #hints b{color:var(--osd);font-weight:600}
+
+  /* messages around crosshair */
+  #aimMsg{
+    position:fixed;left:50%;top:calc(50% + 26px);transform:translateX(-50%);
+    font-size:11px;letter-spacing:.12em;text-shadow:0 1px 2px rgba(0,0,0,.9);
+    z-index:5;pointer-events:none;white-space:nowrap;
+  }
+  #aimMsg.ok{color:var(--ok)}
+  #aimMsg.bad{color:var(--bad)}
+  #lookLabel{
+    position:fixed;left:50%;top:calc(50% - 44px);transform:translateX(-50%);
+    font-size:11px;letter-spacing:.12em;text-shadow:0 1px 2px rgba(0,0,0,.9);
+    z-index:5;pointer-events:none;white-space:nowrap;display:none;
+  }
+  #lookLabel b{color:#fff}
+  #lookLabel span{color:var(--osd-dim)}
+  #intPrompt{
+    left:50%;bottom:96px;transform:translateX(-50%);
+    font-size:11px;letter-spacing:.15em;display:none;white-space:nowrap;
+  }
+  #intPrompt b{color:var(--ok)}
+
+  /* engineer's phone */
+  #phone{
+    position:fixed;right:16px;bottom:16px;width:218px;z-index:6;
+    background:#04070a;border:2px solid #2a3138;border-radius:20px;
+    padding:16px 10px 18px;transform:rotate(-2deg);
+    box-shadow:0 10px 26px rgba(0,0,0,.55);display:none;
+  }
+  #phoneScreen{
+    background:#0b1116;border-radius:8px;padding:10px;
+    font-size:10.5px;line-height:1.75;letter-spacing:.05em;min-height:138px;
+  }
+  #phoneScreen .pTitle{color:var(--ok);letter-spacing:.16em;font-size:9.5px;margin-bottom:5px}
+  #phoneScreen .pBig{font-size:17px;letter-spacing:.08em}
+  #phoneScreen .pDim{color:var(--osd-dim)}
+  #phoneScreen .pOk{color:var(--ok)}
+  #phoneScreen .pWarn{color:var(--warn)}
+  .pBar{height:6px;background:#1b242e;border-radius:3px;overflow:hidden;margin:6px 0}
+  .pBar i{display:block;height:100%;background:var(--ok)}
+
+  /* van feed app */
+  #feedApp{
+    position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:300px;max-height:70vh;z-index:6;display:none;
+    background:#10151b;border:1px solid rgba(255,255,255,.15);border-radius:8px;
+    overflow:hidden;
+  }
+  #feedApp .fhead{background:#1b2733;padding:9px 12px;font-size:12px;letter-spacing:.18em;color:#9fd0ff}
+  #feedApp .fpost{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.07);font-size:11px;line-height:1.65;letter-spacing:.03em}
+  #feedApp .fpost .fwho{color:#9fd0ff;font-size:10px;letter-spacing:.08em;margin-bottom:2px}
+  #feedApp .fpost .fmeta{color:var(--osd-dim);font-size:9px;margin-top:4px}
+  #vanHint{left:50%;bottom:16px;transform:translateX(-50%);font-size:10.5px;color:var(--osd-dim);letter-spacing:.1em;display:none}
+  #vanHint b{color:var(--osd)}
+
+  /* ---- camera feed view ---- */
+  body.feed #covChip, body.feed #recChip, body.feed #cross,
+  body.feed #hotbar, body.feed #hints, body.feed #aimMsg,
+  body.feed #intPrompt, body.feed #stageChip, body.feed #phone,
+  body.feed #lookLabel { display:none !important }
+  body.feed canvas{ filter:saturate(.5) contrast(1.07) brightness(.96) }
+
+  #feedUI{display:none}
+  body.feed #feedUI{display:block}
+  #feedName{top:14px;left:14px;font-size:13px;letter-spacing:.18em}
+  #feedClock{top:14px;right:14px;font-size:12px;letter-spacing:.12em;display:flex;align-items:center;gap:8px}
+  #feedClock .dot{width:8px;height:8px;border-radius:50%;background:var(--rec);animation:blink 1.4s steps(1) infinite}
+  #feedHint{left:50%;bottom:16px;transform:translateX(-50%);font-size:10.5px;color:var(--osd-dim);letter-spacing:.12em}
+  #feedHint b{color:var(--osd)}
+  #feedVignette{
+    position:fixed;inset:0;z-index:4;pointer-events:none;
+    box-shadow:inset 0 0 140px rgba(0,0,0,.55);
+  }
+  #noSignal{
+    position:fixed;inset:0;z-index:6;background:#05080a;
+    display:none;align-items:center;justify-content:center;
+    font-size:26px;letter-spacing:.5em;text-indent:.5em;color:var(--osd-dim);
+  }
+
+  /* ---- fullscreen device UIs (portal / router / NVR) ---- */
+  .uiPanel{
+    position:fixed;inset:0;z-index:9;display:none;
+    align-items:flex-start;justify-content:center;
+    background:rgba(4,7,9,.72);overflow:auto;padding:5vh 16px;
+  }
+  .uiPanel .win{width:min(680px,94vw);border-radius:6px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.6)}
+  .uiBtn{
+    display:inline-block;border:none;cursor:pointer;border-radius:3px;
+    font-family:inherit;font-size:11.5px;letter-spacing:.1em;
+    padding:9px 16px;margin:4px 6px 4px 0;
+  }
+
+  /* portal: a website */
+  #portalUI .win{background:#eef1f2;color:#22313a}
+  #portalUI .phead{background:var(--teal);color:#fff;padding:16px 22px}
+  #portalUI .phead .pt1{font-size:17px;letter-spacing:.22em}
+  #portalUI .phead .pt2{font-size:10px;letter-spacing:.18em;opacity:.8;margin-top:3px}
+  #portalUI .pbody{padding:18px 22px 22px;font-size:12px;line-height:1.7}
+  #portalUI label{display:block;font-size:10px;letter-spacing:.14em;color:#5a6b74;margin:10px 0 3px}
+  #portalUI input,#portalUI select{
+    font-family:inherit;font-size:12.5px;padding:7px 9px;border:1px solid #b9c4ca;
+    border-radius:3px;background:#fff;color:#22313a;width:100%;max-width:280px;
+  }
+  #portalUI table{border-collapse:collapse;width:100%;margin-top:8px}
+  #portalUI th{font-size:9.5px;letter-spacing:.14em;color:#5a6b74;text-align:left;padding:6px 8px;border-bottom:1px solid #c9d2d7}
+  #portalUI td{padding:6px 8px;border-bottom:1px solid #dde4e8;font-size:11.5px}
+  #portalUI td input,#portalUI td select{max-width:160px;padding:5px 7px;font-size:11.5px}
+  #portalUI .uiBtn.primary{background:var(--teal);color:#fff}
+  #portalUI .uiBtn.plain{background:#cdd6da;color:#22313a}
+  #portalUI .errs{color:#b3261e;font-size:11.5px;line-height:1.7;margin-top:10px}
+  #portalUI .pack{background:#fff;border:1px solid #c9d2d7;border-radius:4px;padding:14px 16px;margin-top:12px}
+  #portalUI .pack .pk{display:grid;grid-template-columns:140px auto;gap:3px 12px;font-size:12px}
+  #portalUI .pack .pk span{color:#5a6b74;font-size:10px;letter-spacing:.12em;align-self:center}
+  #portalUI .okmsg{color:#0c7a43;letter-spacing:.06em}
+
+  /* router: terminal */
+  #routerUI .win{background:#08110c;color:#9fe3b0;border:1px solid #1d4029}
+  #routerUI .rbody{padding:20px 24px;font-size:12.5px;line-height:2;letter-spacing:.05em}
+  #routerUI .rh{color:#5da673;font-size:10.5px;letter-spacing:.2em;border-bottom:1px solid #1d4029;padding-bottom:6px;margin-bottom:10px}
+  #routerUI .rv{color:#d6ffe0}
+  #routerUI .uiBtn{background:#143521;color:#9fe3b0;border:1px solid #1d4029}
+
+  /* NVR: utilitarian */
+  #nvrUI .win{background:#10161b;color:var(--osd);border:1px solid rgba(255,255,255,.2)}
+  #nvrUI .nbody{padding:18px 22px 22px;font-size:12px;line-height:1.8}
+  #nvrUI .nh{font-size:13px;letter-spacing:.22em;border-bottom:1px solid rgba(255,255,255,.15);padding-bottom:8px;margin-bottom:10px}
+  #nvrUI label{display:block;font-size:10px;letter-spacing:.14em;color:var(--osd-dim);margin:9px 0 3px}
+  #nvrUI input{
+    font-family:inherit;font-size:12.5px;padding:7px 9px;border:1px solid rgba(255,255,255,.25);
+    border-radius:3px;background:#0a0f13;color:var(--osd);width:100%;max-width:300px;
+  }
+  #nvrUI .uiBtn{background:#22303a;color:var(--osd);border:1px solid rgba(255,255,255,.2)}
+  #nvrUI .stat{margin:6px 0 10px}
+  #nvrUI .ok{color:var(--ok)} #nvrUI .warn{color:var(--warn)} #nvrUI .bad{color:var(--bad)}
+
+  /* win panel */
+  #winPanel{
+    position:fixed;inset:0;z-index:8;display:none;
+    align-items:center;justify-content:center;pointer-events:none;
+  }
+  #winPanel .panel{
+    background:rgba(6,10,9,.82);
+    border:1px solid rgba(255,255,255,.25);
+    border-radius:4px;padding:26px 40px;text-align:center;
+    text-shadow:0 1px 2px rgba(0,0,0,.8);
+  }
+  #winPanel .wtitle{font-size:22px;letter-spacing:.34em;text-indent:.34em;color:var(--ok);margin-bottom:8px}
+  #winStars{font-size:26px;letter-spacing:.3em;text-indent:.3em;color:var(--warn);margin-bottom:14px}
+  #winStats{font-size:12px;letter-spacing:.08em;color:var(--osd);line-height:2;margin-bottom:14px}
+  #winStats span{color:var(--osd-dim)}
+  #winPanel .wgo{font-size:10.5px;letter-spacing:.18em;color:var(--osd-dim)}
+
+  /* start / pause overlay */
+  #overlay{
+    position:fixed;inset:0;z-index:10;
+    background:rgba(7,10,12,.85);
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;overflow:auto;
+  }
+  #overlay .panel{max-width:640px;padding:24px;text-align:center}
+  #overlay h1{
+    font-size:42px;font-weight:700;letter-spacing:.42em;margin:0 0 4px;
+    text-indent:.42em;
+  }
+  #overlay .tag{color:var(--osd-dim);font-size:12px;letter-spacing:.18em;margin-bottom:14px}
+  #overlay .brief{
+    color:var(--osd);font-size:12px;letter-spacing:.06em;line-height:1.7;
+    max-width:520px;margin:0 auto 20px;
+  }
+  #overlay .ctl{
+    display:grid;grid-template-columns:auto auto;gap:5px 18px;
+    justify-content:center;text-align:left;
+    font-size:11.5px;letter-spacing:.06em;color:var(--osd-dim);
+    margin-bottom:22px;
+  }
+  #overlay .ctl b{color:var(--osd);font-weight:600;text-align:right}
+  #overlay .go{font-size:13px;letter-spacing:.2em;color:var(--ok)}
+  #overlay .note{margin-top:14px;font-size:10px;color:var(--osd-dim);letter-spacing:.08em}
+</style>
+</head>
+<body>
+
+<div id="covChip" class="chip">
+  <div id="covMain"><b id="covPct">0.0%</b> <span id="covTarget" style="font-size:11px;color:var(--osd-dim)"></span></div>
+  <div id="covSub">INSIDE 0% &middot; OUTSIDE 0% &middot; CAMS 0</div>
+  <div id="covBudget"></div>
+  <div id="covZones"></div>
+</div>
+
+<div id="stageChip" class="chip"><span id="st1">1 INSTALL</span><span class="sep">&rsaquo;</span><span id="st2">2 COMMISSION</span><span class="sep">&rsaquo;</span><span id="st3">3 WALK TEST</span></div>
+
+<div id="recChip" class="chip"><span id="recDot"></span><span>REC</span><span class="dim">&middot;</span><span id="siteName" class="dim"></span></div>
+
+<div id="cross"></div>
+<div id="lookLabel"></div>
+<div id="aimMsg"></div>
+<div id="intPrompt" class="chip"></div>
+
+<div id="hotbar"></div>
+
+<div id="hints" class="chip">
+  <b>LMB</b> place &nbsp; <b>E</b> remove &nbsp; <b>SCROLL</b> pan aim &nbsp; <b>SHIFT+SCROLL</b> tilt &nbsp; <b>Q</b> interact<br>
+  <b>F</b> FOV cones &nbsp; <b>G</b> dots &nbsp; <b>R</b> roof &nbsp; <b>1-7</b> hotbar &nbsp; <b>C</b> call ARC &nbsp; <b>ESC</b> menu
+</div>
+
+<div id="phone"><div id="phoneScreen"></div></div>
+
+<div id="feedApp"><div class="fhead">SCROLLBOOK</div><div id="feedPosts"></div></div>
+<div id="vanHint" class="chip"><b>SCROLL</b> FEED &nbsp; <b>L</b> EAT LUNCH &nbsp; <b>Q</b> GET OUT</div>
+
+<div id="feedUI">
+  <div id="feedName" class="chip">CAM 01</div>
+  <div id="feedClock" class="chip"><span class="dot"></span><span>REC</span><span id="feedTime"></span></div>
+  <div id="feedHint" class="chip"><b>A / D</b> CYCLE &nbsp; <b>Q</b> EXIT</div>
+  <div id="feedVignette"></div>
+  <div id="noSignal">NO SIGNAL</div>
+</div>
+
+<div id="portalUI" class="uiPanel"><div class="win">
+  <div class="phead"><div class="pt1">ARC MONITORING</div><div class="pt2">ALARM RECEIVING CENTRE &middot; INSTALLER PORTAL</div></div>
+  <div class="pbody" id="portalBody"></div>
+</div></div>
+
+<div id="routerUI" class="uiPanel"><div class="win"><div class="rbody" id="routerBody"></div></div></div>
+
+<div id="nvrUI" class="uiPanel"><div class="win"><div class="nbody" id="nvrBody"></div></div></div>
+
+<div id="winPanel">
+  <div class="panel">
+    <div class="wtitle">JOB COMPLETE</div>
+    <div id="winStars"></div>
+    <div id="winStats"></div>
+    <div class="wgo">LMB OR ENTER &middot; CONTINUE</div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="panel">
+    <h1>COVERAGE</h1>
+    <div class="tag">CCTV INSTALLATION SIMULATOR &mdash; FOUNDATION BUILD</div>
+    <div class="brief" id="overlayBrief"></div>
+    <div class="ctl">
+      <b>WASD</b><span>move</span>
+      <b>Mouse</b><span>look</span>
+      <b>1 - 7</b><span>select camera / laptop</span>
+      <b>Scroll</b><span>pan camera aim before placing</span>
+      <b>Shift + Scroll</b><span>tilt camera aim</span>
+      <b>Left click</b><span>place on highlighted surface</span>
+      <b>E</b><span>remove what you're looking at</span>
+      <b>Q</b><span>interact (NVR, router, laptop, van)</span>
+      <b>C</b><span>call the ARC when the site is ready</span>
+      <b>F / G / R</b><span>toggle FOV cones / coverage dots / roof</span>
+    </div>
+    <div class="go">CLICK TO START</div>
+    <div class="note">Desktop controls only in this build. Touch input comes later.</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+
+/* =========================================================
+   COVERAGE - foundation build v4
+   Single file. Three.js r128. Primitive geometry only.
+   The job has three stages:
+     1 INSTALL    place cameras, hit coverage + zones
+     2 COMMISSION laptop -> ARC portal schedule, router for
+                  WAN IP/port, NVR email settings, then an
+                  ARC provisioning wait (van activities skip
+                  time)
+     3 WALK TEST  phone the ARC, activate each signalling
+                  camera by standing in its view
+   ========================================================= */
+
+const D2R = THREE.MathUtils.degToRad;
+const R2D = THREE.MathUtils.radToDeg;
+const clamp = THREE.MathUtils.clamp;
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const pad2 = n => String(n).padStart(2, '0');
+const fmtMSS = s => { const t = Math.ceil(s); return Math.floor(t/60) + ':' + pad2(t % 60); };
+const shuffle = a => { for (let i=a.length-1; i>0; i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
+
+/* =========================================================
+   LEVEL DATA
+   ========================================================= */
+
+const LEVEL = {
+  name: 'UNIT 1',
+  budget: 2500,
+  target: 80,
+  spawn: { x:-3, z:9, yaw:0 },
+  bounds: { minX:-16.5, maxX:16.5, minZ:-13.5, maxZ:13.5 },
+  nvr:    { x:-4.3, z:-3.0 },
+  router: { x:-3.0, y:1.6, z:-3.78 },
+  van:    { x:-10.6, z:6 },     // centre; built by code
+
+  boxes: [
+    // building shell: 12 x 8 m, 3 m walls, door gap on south at x ~ -3
+    { x:0,     y:1.5, z:-4,     sx:12.6, sy:3,    sz:0.3,  m:'wall', c:1,o:1,p:1 },
+    { x:-4.95, y:1.5, z:4,      sx:2.7,  sy:3,    sz:0.3,  m:'wall', c:1,o:1,p:1 },
+    { x:1.95,  y:1.5, z:4,      sx:8.7,  sy:3,    sz:0.3,  m:'wall', c:1,o:1,p:1 },
+    { x:-6,    y:1.5, z:0,      sx:0.3,  sy:3,    sz:7.7,  m:'wall', c:1,o:1,p:1 },
+    { x:6,     y:1.5, z:0,      sx:0.3,  sy:3,    sz:7.7,  m:'wall', c:1,o:1,p:1 },
+    // internal divider with doorway
+    { x:1,     y:1.5, z:-1.625, sx:0.3,  sy:3,    sz:4.45, m:'wall', c:1,o:1,p:1 },
+    { x:1,     y:1.5, z:2.825,  sx:0.3,  sy:3,    sz:2.05, m:'wall', c:1,o:1,p:1 },
+    // roof, floor, ground (floor + ground placeable so the laptop can sit on them)
+    { x:0, y:3.125, z:0, sx:12.6, sy:0.25, sz:8.6, m:'roof', o:1, p:1, roof:1 },
+    { x:0, y:-0.05, z:0, sx:12.6, sy:0.1,  sz:8.6, m:'floor', p:1 },
+    { x:0, y:-0.11, z:0, sx:34,   sy:0.1,  sz:28,  m:'ground', p:1 },
+    // outdoor obstacles
+    { x:10.5, y:0.6, z:3,    sx:1.2, sy:1.2, sz:1.2, m:'crate', c:1,o:1,p:1 },
+    { x:-9,   y:0.5, z:-5.5, sx:1,   sy:1,   sz:1,   m:'crate', c:1,o:1,p:1 },
+    // refuse store bins, outside the east wall
+    { x:7.9, y:0.5, z:-0.6, sx:0.8, sy:1, sz:0.8, m:'bin', c:1,o:1,p:1 },
+    { x:7.9, y:0.5, z:0.6,  sx:0.8, sy:1, sz:0.8, m:'bin', c:1,o:1,p:1 },
+    // flammable goods crate, east room
+    { x:4.6, y:0.5, z:-2.6, sx:1, sy:1, sz:1, m:'crate', c:1,o:1,p:1 },
+    // vehicle gate posts, south edge
+    { x:2.95, y:0.6, z:11, sx:0.25, sy:1.2, sz:0.25, m:'post', c:1,o:1,p:1 },
+    { x:6.05, y:0.6, z:11, sx:0.25, sy:1.2, sz:0.25, m:'post', c:1,o:1,p:1 },
+  ],
+
+  zones: [
+    { label:'GATE',   req:'anpr',    minX:3.4, maxX:5.6, minZ:9.8,  maxZ:12.2, color:0xffa54d, zone:'out', floorY:-0.03 },
+    { label:'REFUSE', req:'thermal', minX:6.6, maxX:8.6, minZ:-1.5, maxZ:1.5,  color:0xff5e8a, zone:'out', floorY:-0.03 },
+    { label:'STORE',  req:'thermal', minX:3.4, maxX:5.6, minZ:-3.4, maxZ:-1.6, color:0xff5e8a, zone:'in',  floorY:0.03 },
+  ],
+
+  regions: [
+    { zone:'in',  minX:-5.5, maxX:5.51, minZ:-3.5, maxZ:3.51, step:1 },
+    { zone:'out', minX:-13,  maxX:13.01, minZ:-11, maxZ:11.01, step:1.5,
+      exclude:[ { minX:-6.8, maxX:6.8, minZ:-4.8, maxZ:4.8 } ] },
+  ],
+};
+
+/* ---------------- catalogue ---------------- */
+
+const CAM_TYPES = [
+  { id:'bullet',  name:'BULLET',  mount:['wall'],           fov:60,  range:12, cost:80,  color:0x4db8ff },
+  { id:'dome',    name:'DOME',    mount:['wall','ceiling'], fov:90,  range:9,  cost:100, color:0xffd24d },
+  { id:'turret',  name:'TURRET',  mount:['wall','ceiling'], fov:100, range:8,  cost:120, color:0xb98cff },
+  { id:'fisheye', name:'FISHEYE', mount:['ceiling'],        fov:360, range:5,  cost:180, color:0x7dff9e },
+  { id:'anpr',    name:'ANPR',    mount:['wall'],           fov:25,  range:15, cost:350, color:0xffa54d },
+  { id:'thermal', name:'THERMAL', mount:['wall','ceiling'], fov:70,  range:10, cost:500, color:0xff5e8a },
+  { id:'laptop',  name:'LAPTOP',  item:true,                cost:0 },
+];
+CAM_TYPES.forEach(t => { if (!t.item) t.cosHalf = Math.cos(D2R(Math.min(t.fov, 180) / 2)); });
+
+/* ---------------- constants ---------------- */
+
+const EYE_HEIGHT   = 1.7;
+const MOVE_SPEED   = 4.5;
+const PLAYER_RAD   = 0.3;
+const REACH        = 8;
+const MIN_MOUNT_Y  = 2.0;
+const SAMPLE_Y     = 1.0;
+const WALK_Y       = 1.2;     // height the walk test checks the player at
+const WALK_HOLD    = 2;       // seconds in view to register an activation
+const PROVISION_S  = 180;     // ARC provisioning time at 1x
+const VAN_TIMESCALE= 4;
+const SMOKE_SKIP   = 45, SMOKE_TIME = 5, SMOKE_CD = 15;
+const LUNCH_SKIP   = 60, LUNCH_TIME = 4;
+const PAN_LIMIT    = D2R(75);
+const TILT_W_MIN   = D2R(5),  TILT_W_MAX = D2R(50);
+const TILT_C_MAX   = D2R(55);
+const AIM_STEP     = D2R(3);
+
+/* ---------------- renderer / scene ---------------- */
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x97a8b4);
+scene.fog = new THREE.Fog(0x97a8b4, 45, 95);
+
+const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.05, 120);
+camera.rotation.order = 'YXZ';
+const feedCam = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.05, 120);
+
+scene.add(new THREE.HemisphereLight(0xd7e6f2, 0x57534c, 0.95));
+const sun = new THREE.DirectionalLight(0xfff2dd, 0.7);
+sun.position.set(12, 22, 7);
+scene.add(sun);
+
+window.addEventListener('resize', () => {
+  camera.aspect = feedCam.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  feedCam.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* ---------------- shared materials / geometry ---------------- */
+
+const MATS = {
+  wall:   new THREE.MeshLambertMaterial({ color:0xcfc9bd }),
+  roof:   new THREE.MeshLambertMaterial({ color:0x4a5258 }),
+  floor:  new THREE.MeshLambertMaterial({ color:0x8d8f8b }),
+  ground: new THREE.MeshLambertMaterial({ color:0x77836b }),
+  crate:  new THREE.MeshLambertMaterial({ color:0x8a6f4d }),
+  bin:    new THREE.MeshLambertMaterial({ color:0x3f5a45 }),
+  post:   new THREE.MeshLambertMaterial({ color:0x5a6168 }),
+  desk:   new THREE.MeshLambertMaterial({ color:0x6f5b44 }),
+  van:    new THREE.MeshLambertMaterial({ color:0x3e5a78 }),
+};
+const matBodyA  = new THREE.MeshLambertMaterial({ color:0xe9eaec });
+const matBodyB  = new THREE.MeshLambertMaterial({ color:0x23262a });
+const matScreen = new THREE.MeshBasicMaterial({ color:0x16242c });
+
+const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+
+/* ---------------- world build ---------------- */
+
+const colliders     = [];
+const occluders     = [];
+const placeSurfaces = [];
+let roofMesh = null;
+
+function addBox(cx, cy, cz, sx, sy, sz, mat, opt = {}) {
+  const m = new THREE.Mesh(boxGeo, mat);
+  m.scale.set(sx, sy, sz);
+  m.position.set(cx, cy, cz);
+  scene.add(m);
+  if (opt.collide) colliders.push({
+    minX: cx - sx/2 - PLAYER_RAD, maxX: cx + sx/2 + PLAYER_RAD,
+    minZ: cz - sz/2 - PLAYER_RAD, maxZ: cz + sz/2 + PLAYER_RAD,
+    rawMinX: cx - sx/2, rawMaxX: cx + sx/2,
+    rawMinZ: cz - sz/2, rawMaxZ: cz + sz/2,
+  });
+  if (opt.occlude) occluders.push(m);
+  if (opt.place)   placeSurfaces.push(m);
+  return m;
+}
+
+for (const b of LEVEL.boxes) {
+  const m = addBox(b.x, b.y, b.z, b.sx, b.sy, b.sz, MATS[b.m], { collide:b.c, occlude:b.o, place:b.p });
+  if (b.roof) roofMesh = m;
+}
+
+// NVR desk + monitor + recorder
+const nvrPos = LEVEL.nvr;
+addBox(nvrPos.x, 0.375, nvrPos.z, 1.3, 0.75, 0.6, MATS.desk, { collide:1, occlude:1, place:1 });
+addBox(nvrPos.x, 0.81, nvrPos.z - 0.1, 0.09, 0.12, 0.09, matBodyB, {});
+addBox(nvrPos.x, 1.06, nvrPos.z - 0.12, 0.56, 0.37, 0.05, matBodyB, {});
+{
+  const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.31), matScreen);
+  sc.position.set(nvrPos.x, 1.06, nvrPos.z - 0.094);
+  scene.add(sc);
+}
+addBox(nvrPos.x + 0.1, 0.82, nvrPos.z + 0.12, 0.42, 0.14, 0.35, matBodyA, {});
+
+// Router on the north wall near the desk
+{
+  const r = LEVEL.router;
+  addBox(r.x, r.y, r.z, 0.26, 0.16, 0.07, matBodyA, {});
+  const ant = new THREE.CylinderGeometry(0.012, 0.012, 0.14, 6);
+  for (const dx of [-0.08, 0.08]) {
+    const a = new THREE.Mesh(ant, matBodyB);
+    a.position.set(r.x + dx, r.y + 0.14, r.z);
+    scene.add(a);
+  }
+}
+
+// Engineer's van, parked west of the building
+{
+  const v = LEVEL.van;
+  addBox(v.x - 0.8, 1.15, v.z, 3.0, 1.7, 1.9, MATS.van, { collide:1, occlude:1 });   // cargo
+  addBox(v.x + 1.5, 0.95, v.z, 1.6, 1.3, 1.9, MATS.van, { collide:1, occlude:1 });   // cab
+  const wg = new THREE.CylinderGeometry(0.3, 0.3, 0.24, 10); wg.rotateX(Math.PI/2);
+  for (const [wx, wz] of [[v.x-1.6, v.z-0.95],[v.x-1.6, v.z+0.95],[v.x+1.5, v.z-0.95],[v.x+1.5, v.z+0.95]]) {
+    const w = new THREE.Mesh(wg, matBodyB); w.position.set(wx, 0.3, wz); scene.add(w);
+  }
+  const ws = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.7), matScreen);
+  ws.position.set(v.x + 2.31, 1.3, v.z); ws.rotation.y = Math.PI/2; scene.add(ws);
+}
+const VAN_SEAT = { x: LEVEL.van.x + 1.6, y: 1.32, z: LEVEL.van.z + 0.45, yaw: -Math.PI/2 };
+
+/* ---------------- player / global state ---------------- */
+
+const player = { x:LEVEL.spawn.x, z:LEVEL.spawn.z, yaw:LEVEL.spawn.yaw, pitch:0 };
+const keys = {};
+let locked = false;
+let mode = 'fp';          // 'fp' | 'feed'
+let uiOpen = null;        // null | 'portal' | 'router' | 'nvr'
+let vanMode = false;
+let tNow = 0;
+
+// commissioning state
+const wanIP = [86, 81, 82, 90, 109][Math.floor(Math.random()*5)] + '.' +
+  (1+Math.floor(Math.random()*254)) + '.' + (1+Math.floor(Math.random()*254)) + '.' + (1+Math.floor(Math.random()*254));
+const ARC_PORT = '8000';
+let smtpPack = null;            // {server, port, email} issued on first accepted schedule
+let surveyPass = false, lastTotal = 0;
+let scheduleSubmitted = false, configDirty = false;
+let nvrConnected = false;
+let provisionRemaining = 0, packIssued = false;
+let walkDone = false;
+let call = null;                // {order:[], idx, progress, lines:[]}
+let camCounter = 0;
+
+// pastimes
+let smokeUntil = 0, smokeCDUntil = 0, smokePending = false;
+let lunchUntil = 0, lunchPending = false, lunchEaten = false;
+let prevPlayerState = null;
+
+function blockedAt(x, z) {
+  for (const c of colliders)
+    if (x > c.minX && x < c.maxX && z > c.minZ && z < c.maxZ) return true;
+  return false;
+}
+
+function movePlayer(dt) {
+  let fx = 0, fz = 0;
+  if (keys['KeyW']) fz += 1;
+  if (keys['KeyS']) fz -= 1;
+  if (keys['KeyA']) fx -= 1;
+  if (keys['KeyD']) fx += 1;
+  if (!fx && !fz) return;
+  const len = Math.hypot(fx, fz); fx /= len; fz /= len;
+  const sin = Math.sin(player.yaw), cos = Math.cos(player.yaw);
+  const dx = (fz * -sin + fx *  cos) * MOVE_SPEED * dt;
+  const dz = (fz * -cos + fx * -sin) * MOVE_SPEED * dt;
+  let nx = player.x + dx;
+  if (!blockedAt(nx, player.z)) player.x = nx;
+  let nz = player.z + dz;
+  if (!blockedAt(player.x, nz)) player.z = nz;
+  player.x = clamp(player.x, LEVEL.bounds.minX, LEVEL.bounds.maxX);
+  player.z = clamp(player.z, LEVEL.bounds.minZ, LEVEL.bounds.maxZ);
+}
+
+/* ---------------- pointer lock ---------------- */
+
+const overlay = document.getElementById('overlay');
+overlay.addEventListener('click', lockPointer);
+
+function lockPointer() {
+  const p = renderer.domElement.requestPointerLock();
+  if (p && p.catch) p.catch(() => {});
+}
+
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === renderer.domElement;
+  overlay.style.display = (locked || uiOpen) ? 'none' : 'flex';
+  if (!locked && mode === 'feed') exitFeed();
+});
+
+document.addEventListener('mousemove', e => {
+  if (!locked || mode !== 'fp' || vanMode) return;
+  player.yaw   -= e.movementX * 0.0022;
+  player.pitch -= e.movementY * 0.0022;
+  player.pitch  = clamp(player.pitch, -1.5, 1.5);
+});
+
+/* ---------------- camera bodies / FOV meshes ---------------- */
+
+const GEO = {
+  plate: new THREE.BoxGeometry(0.16, 0.16, 0.03),
+  lens:  new THREE.SphereGeometry(0.022, 8, 6),
+  bulletBody: (() => { const g = new THREE.CylinderGeometry(0.045, 0.06, 0.26, 10); g.rotateX(Math.PI/2); return g; })(),
+  domeBase:   (() => { const g = new THREE.CylinderGeometry(0.11, 0.11, 0.04, 14);  g.rotateX(Math.PI/2); return g; })(),
+  domeShell:  (() => { const g = new THREE.SphereGeometry(0.10, 12, 8, 0, Math.PI*2, 0, Math.PI/2); g.rotateX(Math.PI/2); return g; })(),
+  turretRing: (() => { const g = new THREE.CylinderGeometry(0.095, 0.095, 0.07, 14); g.rotateX(Math.PI/2); return g; })(),
+  turretBall: new THREE.SphereGeometry(0.07, 10, 8),
+  eyeShell:   (() => { const g = new THREE.SphereGeometry(0.075, 12, 8, 0, Math.PI*2, 0, Math.PI/2); g.rotateX(Math.PI/2); return g; })(),
+  anprBody:   new THREE.BoxGeometry(0.16, 0.12, 0.3),
+  thermBody:  (() => { const g = new THREE.CylinderGeometry(0.055, 0.055, 0.2, 10); g.rotateX(Math.PI/2); return g; })(),
+  thermLens:  new THREE.SphereGeometry(0.032, 8, 6),
+  lapBase:    new THREE.BoxGeometry(0.36, 0.025, 0.26),
+  lapScreen:  new THREE.BoxGeometry(0.36, 0.24, 0.02),
+  lapFace:    new THREE.PlaneGeometry(0.32, 0.2),
+};
+
+function makeBody(type, matOverride) {
+  const g = new THREE.Group();
+  const mA = matOverride || matBodyA;
+  const mB = matOverride || matBodyB;
+  const add = (geo, mat, z) => { const m = new THREE.Mesh(geo, mat); m.position.z = z; g.add(m); };
+  add(GEO.plate, mB, 0.015);
+  if (type.id === 'bullet')       { add(GEO.bulletBody, mA, 0.17);  add(GEO.lens, mB, 0.30); }
+  else if (type.id === 'dome')    { add(GEO.domeBase, mA, 0.035);   add(GEO.domeShell, mB, 0.04); }
+  else if (type.id === 'turret')  { add(GEO.turretRing, mA, 0.05);  add(GEO.turretBall, mB, 0.08); }
+  else if (type.id === 'fisheye') { add(GEO.eyeShell, mB, 0.03); }
+  else if (type.id === 'anpr')    { add(GEO.anprBody, mA, 0.18);    add(GEO.lens, mB, 0.34); }
+  else                            { add(GEO.thermBody, mA, 0.14);   add(GEO.thermLens, mB, 0.25); }
+  return g;
+}
+
+function makeLaptop(matOverride) {
+  const g = new THREE.Group();
+  const mA = matOverride || matBodyA;
+  const base = new THREE.Mesh(GEO.lapBase, mA); base.position.y = 0.0125; g.add(base);
+  const scr = new THREE.Mesh(GEO.lapScreen, mA);
+  scr.position.set(0, 0.12, -0.135); scr.rotation.x = -0.38; g.add(scr);
+  const face = new THREE.Mesh(GEO.lapFace, matOverride || matScreen);
+  face.position.z = 0.012; scr.add(face);
+  return g;
+}
+
+const fovGeoCache = {};
+function fovGeometry(type) {
+  if (fovGeoCache[type.id]) return fovGeoCache[type.id];
+  let g;
+  if (type.fov >= 180) {
+    g = new THREE.SphereGeometry(type.range, 16, 8, 0, Math.PI*2, Math.PI/2, Math.PI/2);
+    g.rotateX(-Math.PI/2);
+  } else {
+    const r = Math.tan(D2R(type.fov/2)) * type.range;
+    g = new THREE.ConeGeometry(r, type.range, 18, 1, true);
+    g.translate(0, -type.range/2, 0);
+    g.rotateX(-Math.PI/2);
+  }
+  fovGeoCache[type.id] = g;
+  return g;
+}
+
+const fovMatCache = {};
+function fovMaterial(type) {
+  if (!fovMatCache[type.id]) fovMatCache[type.id] = new THREE.MeshBasicMaterial({
+    color:type.color, transparent:true, opacity:0.10,
+    side:THREE.DoubleSide, depthWrite:false,
+  });
+  return fovMatCache[type.id];
+}
+
+/* ---------------- placement ghost + aim ---------------- */
+
+const ghostMat = new THREE.MeshBasicMaterial({ transparent:true, opacity:0.55, depthWrite:false });
+const ghostFovMat = new THREE.MeshBasicMaterial({
+  transparent:true, opacity:0.08, side:THREE.DoubleSide, depthWrite:false,
+});
+
+const ghostRoot = new THREE.Group();
+scene.add(ghostRoot);
+let ghostBody = null, ghostCone = null;
+let ghostValid = false;
+let ghostMount = 'wall';
+let selected = 0;
+let spent = 0;
+let laptopGroup = null;   // placed laptop, null when in inventory
+
+let aimPanW = 0,  aimTiltW = D2R(15);
+let aimPanC = 0,  aimTiltC = 0;
+
+function rebuildGhost() {
+  while (ghostRoot.children.length) ghostRoot.remove(ghostRoot.children[0]);
+  const type = CAM_TYPES[selected];
+  if (type.item) {
+    ghostBody = makeLaptop(ghostMat);
+    ghostCone = null;
+    ghostRoot.add(ghostBody);
+  } else {
+    ghostBody = makeBody(type, ghostMat);
+    ghostCone = new THREE.Mesh(fovGeometry(type), ghostFovMat);
+    ghostRoot.add(ghostBody, ghostCone);
+  }
+  ghostRoot.visible = false;
+}
+
+const rayAim = new THREE.Raycaster();
+rayAim.far = REACH;
+const _n = new THREE.Vector3();
+const _m3 = new THREE.Matrix3();
+const Z_AXIS = new THREE.Vector3(0, 0, 1);
+const aimMsg = document.getElementById('aimMsg');
+const lookLabel = document.getElementById('lookLabel');
+
+let ghostPos = new THREE.Vector3();
+let ghostQuat = new THREE.Quaternion();
+let ghostDir = new THREE.Vector3();
+let ghostYaw = 0;   // laptop orientation
+
+const rdeg = r => Math.round(R2D(r));
+
+function setAim(txt, ok) { aimMsg.textContent = txt; aimMsg.className = ok ? 'ok' : 'bad'; }
+
+function updateGhost() {
+  const type = CAM_TYPES[selected];
+  rayAim.setFromCamera({ x:0, y:0 }, camera);
+  const hit = rayAim.intersectObjects(placeSurfaces, false)[0];
+
+  if (!hit || !hit.face) {
+    ghostRoot.visible = false; ghostValid = false;
+    aimMsg.textContent = ''; return;
+  }
+
+  _n.copy(hit.face.normal).applyMatrix3(_m3.getNormalMatrix(hit.object.matrixWorld)).normalize();
+
+  /* ---- laptop placement ---- */
+  if (type.item) {
+    const flat = _n.y > 0.7;
+    const okH  = hit.point.y <= 1.2;
+    ghostValid = flat && okH && !laptopGroup;
+    ghostPos.copy(hit.point).addScaledVector(_n, 0.005);
+    ghostYaw = player.yaw;
+    ghostRoot.position.copy(ghostPos);
+    ghostRoot.quaternion.set(0,0,0,1);
+    ghostRoot.rotation.y = ghostYaw;
+    ghostRoot.visible = true;
+    ghostMat.color.setHex(ghostValid ? 0x6fe39a : 0xff6a5e);
+    if (ghostValid) setAim('PLACE: LAPTOP', true);
+    else setAim(laptopGroup ? 'LAPTOP ALREADY PLACED (E TO PICK UP)' : !flat ? 'NEEDS A FLAT SURFACE' : 'TOO HIGH', false);
+    return;
+  }
+
+  /* ---- camera placement ---- */
+  let mount = null;
+  if (_n.y < -0.7) mount = 'ceiling';
+  else if (Math.abs(_n.y) <= 0.4) mount = 'wall';
+  if (mount) ghostMount = mount;
+
+  const tooLow     = mount === 'wall' && hit.point.y < MIN_MOUNT_Y;
+  const wrongMount = !mount || !type.mount.includes(mount);
+  const overBudget = type.cost > LEVEL.budget - spent;
+  ghostValid = !wrongMount && !tooLow && !overBudget;
+
+  let aimTxt = '';
+  if (type.id === 'fisheye') {
+    ghostDir.set(0, -1, 0);
+  } else if (mount === 'ceiling') {
+    const st = Math.sin(aimTiltC), ct = Math.cos(aimTiltC);
+    ghostDir.set(Math.sin(aimPanC) * st, -ct, Math.cos(aimPanC) * st);
+    aimTxt = ' \u00B7 PAN ' + ((rdeg(aimPanC) % 360 + 360) % 360) + '\u00B0 \u00B7 TILT ' + rdeg(aimTiltC) + '\u00B0';
+  } else {
+    const baseYaw = Math.atan2(_n.x, _n.z);
+    const yaw = baseYaw + aimPanW;
+    const ct = Math.cos(aimTiltW), st = Math.sin(aimTiltW);
+    ghostDir.set(Math.sin(yaw) * ct, -st, Math.cos(yaw) * ct);
+    aimTxt = ' \u00B7 PAN ' + (aimPanW >= 0 ? '+' : '') + rdeg(aimPanW) + '\u00B0 \u00B7 TILT ' + rdeg(aimTiltW) + '\u00B0';
+  }
+  ghostQuat.setFromUnitVectors(Z_AXIS, ghostDir);
+  ghostPos.copy(hit.point).addScaledVector(_n, 0.06);
+
+  ghostRoot.position.copy(ghostPos);
+  ghostRoot.quaternion.copy(ghostQuat);
+  ghostRoot.visible = true;
+  if (ghostCone) ghostCone.visible = ghostValid;
+
+  const col = ghostValid ? 0x6fe39a : 0xff6a5e;
+  ghostMat.color.setHex(col);
+  ghostFovMat.color.setHex(col);
+
+  if (ghostValid) setAim('PLACE: ' + type.name + ' \u00A3' + type.cost + aimTxt, true);
+  else setAim(
+    !mount      ? 'NO MOUNT SURFACE' :
+    wrongMount  ? 'INVALID SURFACE FOR ' + type.name :
+    tooLow      ? 'MOUNT TOO LOW (MIN ' + MIN_MOUNT_Y + 'M)' :
+                  'OVER BUDGET (\u00A3' + (LEVEL.budget - spent) + ' LEFT)', false);
+}
+
+window.addEventListener('wheel', e => {
+  if (!locked) return;
+  e.preventDefault();
+  const raw = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+  if (!raw) return;
+  if (vanMode) { scrollFeed(Math.sign(raw)); return; }
+  if (mode !== 'fp') return;
+  const step = Math.sign(raw) * AIM_STEP;
+  const type = CAM_TYPES[selected];
+  if (type.item || type.id === 'fisheye') return;
+  if (e.shiftKey) {
+    if (ghostMount === 'ceiling') aimTiltC = clamp(aimTiltC + step, 0, TILT_C_MAX);
+    else                          aimTiltW = clamp(aimTiltW + step, TILT_W_MIN, TILT_W_MAX);
+  } else {
+    if (ghostMount === 'ceiling') aimPanC += step;
+    else                          aimPanW = clamp(aimPanW + step, -PAN_LIMIT, PAN_LIMIT);
+  }
+}, { passive:false });
+
+/* ---------------- placed cameras / laptop ---------------- */
+
+const camsRoot = new THREE.Group(); scene.add(camsRoot);
+const fovRoot  = new THREE.Group(); scene.add(fovRoot);
+const placed = [];
+let fovVisible = true;
+
+function markDirty() {
+  if (!scheduleSubmitted) return;
+  configDirty = true;
+  if (call) { call = null; }   // operator drops the test on a config change
+  updateStageChip();
+}
+
+function placeCurrent() {
+  if (!ghostValid) return;
+  const type = CAM_TYPES[selected];
+
+  if (type.item) {   // laptop
+    laptopGroup = makeLaptop();
+    laptopGroup.position.copy(ghostPos);
+    laptopGroup.rotation.y = ghostYaw;
+    scene.add(laptopGroup);
+    rebuildGhost();
+    return;
+  }
+
+  const body = makeBody(type);
+  body.position.copy(ghostPos);
+  body.quaternion.copy(ghostQuat);
+  camsRoot.add(body);
+
+  const cone = new THREE.Mesh(fovGeometry(type), fovMaterial(type));
+  cone.position.copy(ghostPos);
+  cone.quaternion.copy(ghostQuat);
+  cone.visible = fovVisible;
+  fovRoot.add(cone);
+
+  camCounter++;
+  placed.push({
+    type, body, cone,
+    name: 'CAM ' + pad2(camCounter),
+    alarm: null,
+    origin: ghostPos.clone().addScaledVector(ghostDir, 0.08),
+    dir: ghostDir.clone(),
+  });
+  spent += type.cost;
+  markDirty();
+  recompute();
+}
+
+function lookedAtCamera() {
+  rayAim.setFromCamera({ x:0, y:0 }, camera);
+  const hit = rayAim.intersectObjects(camsRoot.children, true)[0];
+  if (!hit) return null;
+  let o = hit.object;
+  while (o.parent && o.parent !== camsRoot) o = o.parent;
+  return placed.find(c => c.body === o) || null;
+}
+
+function removeLooked() {
+  const cam = lookedAtCamera();
+  if (cam) {
+    const i = placed.indexOf(cam);
+    spent -= cam.type.cost;
+    camsRoot.remove(cam.body);
+    fovRoot.remove(cam.cone);
+    placed.splice(i, 1);
+    markDirty();
+    recompute();
+    return;
+  }
+  if (laptopGroup) {   // try picking the laptop up
+    rayAim.setFromCamera({ x:0, y:0 }, camera);
+    if (rayAim.intersectObject(laptopGroup, true).length) {
+      scene.remove(laptopGroup);
+      laptopGroup = null;
+      rebuildGhost();
+    }
+  }
+}
+
+/* ---------------- requirement zones + coverage ---------------- */
+
+const points = [];
+const zones = [];
+
+function insideAnyCollider(x, z, pad) {
+  for (const c of colliders)
+    if (x > c.rawMinX - pad && x < c.rawMaxX + pad && z > c.rawMinZ - pad && z < c.rawMaxZ + pad) return true;
+  return false;
+}
+
+const zoneFrameMats = {};
+function buildZone(zd) {
+  const zone = { label:zd.label, req:zd.req, total:0, got:0 };
+  zones.push(zone);
+  if (!zoneFrameMats[zd.color]) zoneFrameMats[zd.color] = {
+    fill:  new THREE.MeshBasicMaterial({ color:zd.color, transparent:true, opacity:0.10, depthWrite:false, side:THREE.DoubleSide }),
+    frame: new THREE.MeshBasicMaterial({ color:zd.color }),
+  };
+  const mats = zoneFrameMats[zd.color];
+  const w = zd.maxX - zd.minX, d = zd.maxZ - zd.minZ;
+  const cx = (zd.minX + zd.maxX)/2, cz = (zd.minZ + zd.maxZ)/2;
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mats.fill);
+  quad.rotation.x = -Math.PI/2;
+  quad.position.set(cx, zd.floorY, cz);
+  scene.add(quad);
+  const fr = (fx, fz, sx, sz) => {
+    const m = new THREE.Mesh(boxGeo, mats.frame);
+    m.scale.set(sx, 0.05, sz);
+    m.position.set(fx, zd.floorY + 0.01, fz);
+    scene.add(m);
+  };
+  fr(cx, zd.minZ, w + 0.06, 0.06); fr(cx, zd.maxZ, w + 0.06, 0.06);
+  fr(zd.minX, cz, 0.06, d); fr(zd.maxX, cz, 0.06, d);
+
+  for (let x = zd.minX + 0.4; x <= zd.maxX - 0.39; x += 0.8)
+    for (let z = zd.minZ + 0.4; z <= zd.maxZ - 0.39; z += 0.8) {
+      if (insideAnyCollider(x, z, 0.2)) continue;
+      points.push({ pos:new THREE.Vector3(x, SAMPLE_Y, z), zone:zd.zone, cov:false, covReq:false, req:zd.req, zoneRef:zone });
+      zone.total++;
+    }
+}
+LEVEL.zones.forEach(buildZone);
+
+for (const r of LEVEL.regions)
+  for (let x = r.minX; x <= r.maxX; x += r.step)
+    for (let z = r.minZ; z <= r.maxZ; z += r.step) {
+      if (r.exclude && r.exclude.some(e => x > e.minX && x < e.maxX && z > e.minZ && z < e.maxZ)) continue;
+      if (insideAnyCollider(x, z, 0.2)) continue;
+      points.push({ pos:new THREE.Vector3(x, SAMPLE_Y, z), zone:r.zone, cov:false, covReq:false, req:null, zoneRef:null });
+    }
+
+const inTotal  = points.filter(p => p.zone === 'in').length;
+const outTotal = points.length - inTotal;
+
+const ptGeo = new THREE.BufferGeometry();
+const ptPositions = new Float32Array(points.length * 3);
+const ptColors    = new Float32Array(points.length * 3);
+points.forEach((p, i) => p.pos.toArray(ptPositions, i * 3));
+ptGeo.setAttribute('position', new THREE.BufferAttribute(ptPositions, 3));
+ptGeo.setAttribute('color',    new THREE.BufferAttribute(ptColors, 3));
+const ptCloud = new THREE.Points(ptGeo, new THREE.PointsMaterial({
+  size:0.12, vertexColors:true, transparent:true, opacity:0.9, depthWrite:false,
+}));
+scene.add(ptCloud);
+
+const raySight = new THREE.Raycaster();
+raySight.near = 0.05;
+const _v = new THREE.Vector3();
+
+function camSees(c, px, py, pz) {
+  _v.set(px, py, pz).sub(c.origin);
+  const d = _v.length();
+  if (d > c.type.range) return false;
+  _v.divideScalar(d);
+  if (_v.dot(c.dir) < c.type.cosHalf) return false;
+  raySight.set(c.origin, _v);
+  raySight.far = Math.max(0, d - 0.12);
+  return raySight.intersectObjects(occluders, false).length === 0;
+}
+
+const covPct    = document.getElementById('covPct');
+const covSub    = document.getElementById('covSub');
+const covBudget = document.getElementById('covBudget');
+const covZones  = document.getElementById('covZones');
+
+function recompute() {
+  let inC = 0, outC = 0;
+  zones.forEach(z => z.got = 0);
+
+  for (const p of points) {
+    p.cov = false; p.covReq = false;
+    for (const c of placed) {
+      if (!camSees(c, p.pos.x, p.pos.y, p.pos.z)) continue;
+      p.cov = true;
+      if (p.req && c.type.id === p.req) p.covReq = true;
+      if (!p.req || p.covReq) break;
+    }
+    if (p.cov) (p.zone === 'in' ? inC++ : outC++);
+    if (p.covReq) p.zoneRef.got++;
+  }
+
+  points.forEach((p, i) => {
+    const o = i * 3;
+    if (p.req && p.cov && !p.covReq) { ptColors[o] = 1.0;  ptColors[o+1] = 0.76; ptColors[o+2] = 0.25; }
+    else if (p.cov)                  { ptColors[o] = 0.25; ptColors[o+1] = 1.0;  ptColors[o+2] = 0.45; }
+    else                             { ptColors[o] = 1.0;  ptColors[o+1] = 0.28; ptColors[o+2] = 0.24; }
+  });
+  ptGeo.attributes.color.needsUpdate = true;
+
+  lastTotal = points.length ? ((inC + outC) / points.length) * 100 : 0;
+  const zonesDone = zones.every(z => z.got === z.total);
+  surveyPass = lastTotal >= LEVEL.target && zonesDone;
+
+  covPct.textContent = lastTotal.toFixed(1) + '%';
+  covPct.className = surveyPass ? 'pass' : '';
+  covSub.textContent =
+    'INSIDE ' + Math.round((inC / inTotal) * 100) + '% \u00B7 ' +
+    'OUTSIDE ' + Math.round((outC / outTotal) * 100) + '% \u00B7 ' +
+    'CAMS ' + placed.length;
+  covBudget.textContent = 'BUDGET \u00A3' + (LEVEL.budget - spent) + ' / \u00A3' + LEVEL.budget;
+  covZones.innerHTML = zones.map(z => {
+    const done = z.got === z.total;
+    return '<span class="z ' + (done ? 'ok' : 'bad') + '">' +
+      (done ? '\u2713 ' : '\u2717 ') + z.label + ' \u00B7 ' + z.req.toUpperCase() +
+      ' (' + z.got + '/' + z.total + ')</span>';
+  }).join('');
+  updateStageChip();
+}
+
+/* ---------------- stage tracker ---------------- */
+
+const stEls = [document.getElementById('st1'), document.getElementById('st2'), document.getElementById('st3')];
+function updateStageChip() {
+  const s1 = surveyPass || scheduleSubmitted;
+  const s2 = scheduleSubmitted && !configDirty && nvrConnected && provisionRemaining <= 0;
+  const s3 = walkDone;
+  const states = [s1, s2, s3];
+  let curSet = false;
+  states.forEach((done, i) => {
+    stEls[i].className = done ? 'done' : (!curSet ? 'cur' : '');
+    if (!done && !curSet) curSet = true;
+  });
+}
+
+/* ---------------- win panel ---------------- */
+
+const winPanel = document.getElementById('winPanel');
+let winOpen = false;
+
+function openWin() {
+  const left = LEVEL.budget - spent;
+  let stars = 1;
+  if (lastTotal >= 90) stars = 2;
+  if (lastTotal >= 90 && left >= 300) stars = 3;
+  document.getElementById('winStars').textContent = '\u2605'.repeat(stars) + '\u2606'.repeat(3 - stars);
+  document.getElementById('winStats').innerHTML =
+    '<span>COVERAGE</span> ' + lastTotal.toFixed(1) + '%<br>' +
+    '<span>CAMERAS</span> ' + placed.length + '<br>' +
+    '<span>BUDGET LEFT</span> \u00A3' + left + '<br>' +
+    '<span>WALK TEST</span> PASSED';
+  winPanel.style.display = 'flex';
+  winOpen = true;
+}
+function closeWin() { winPanel.style.display = 'none'; winOpen = false; }
+
+/* ---------------- device UIs ---------------- */
+
+const uiPanels = { portal:document.getElementById('portalUI'), router:document.getElementById('routerUI'), nvr:document.getElementById('nvrUI') };
+
+function openUI(name) {
+  uiOpen = name;
+  if (name === 'portal') renderPortal();
+  if (name === 'router') renderRouter();
+  if (name === 'nvr')    renderNVR();
+  uiPanels[name].style.display = 'flex';
+  document.exitPointerLock();
+}
+function closeUI() {
+  Object.values(uiPanels).forEach(p => p.style.display = 'none');
+  uiOpen = null;
+  lockPointer();
+}
+
+/* ---- router screen ---- */
+function renderRouter() {
+  document.getElementById('routerBody').innerHTML =
+    '<div class="rh">SITE ROUTER &middot; STATUS</div>' +
+    'WAN .............. <span class="rv">CONNECTED</span><br>' +
+    'WAN IP ........... <span class="rv">' + wanIP + '</span><br>' +
+    'LAN .............. <span class="rv">192.168.1.1</span><br>' +
+    'DHCP ............. <span class="rv">ENABLED</span><br><br>' +
+    '<div class="rh">PORT FORWARDING</div>' +
+    'TCP <span class="rv">' + ARC_PORT + '</span> &rarr; <span class="rv">192.168.1.108</span> (NVR) &middot; <span class="rv">ACTIVE</span><br><br>' +
+    '<button class="uiBtn" id="rClose">CLOSE</button>';
+  document.getElementById('rClose').onclick = closeUI;
+}
+
+/* ---- ARC portal ---- */
+const ALARM_OPTS = [['',''],['intrusion','INTRUSION'],['thermal','THERMAL'],['view','VIEW ONLY']];
+
+function renderPortal() {
+  const body = document.getElementById('portalBody');
+
+  if (!surveyPass && !scheduleSubmitted) {
+    body.innerHTML =
+      '<p><b>SITE SURVEY INCOMPLETE.</b></p>' +
+      '<p>A signalling schedule cannot be lodged until the site survey passes: ' +
+      LEVEL.target + '% coverage and all required zones covered by the correct detector type.</p>' +
+      '<p>Current coverage: ' + lastTotal.toFixed(1) + '%.</p>' +
+      '<button class="uiBtn plain" id="pClose">CLOSE</button>';
+    document.getElementById('pClose').onclick = closeUI;
+    return;
+  }
+
+  if (scheduleSubmitted && !configDirty) {   // accepted: show the connection pack
+    body.innerHTML =
+      '<p class="okmsg"><b>SIGNALLING SCHEDULE LODGED \u2713</b></p>' +
+      '<div class="pack"><div class="pk">' +
+      '<span>SMTP SERVER</span><b>' + smtpPack.server + '</b>' +
+      '<span>SMTP PORT</span><b>' + smtpPack.port + '</b>' +
+      '<span>ALARM EMAIL</span><b>' + smtpPack.email + '</b>' +
+      '<span>ARC PHONE</span><b>0117 496 0900</b>' +
+      '</div></div>' +
+      '<p>Enter the SMTP details into your NVR network settings. ' +
+      (provisionRemaining > 0
+        ? 'Provisioning in progress: allow ' + fmtMSS(provisionRemaining) + ' before the walk test.'
+        : 'Provisioning complete. Phone the ARC for your walk test when the NVR is connected.') + '</p>' +
+      '<button class="uiBtn plain" id="pAmend">AMEND SCHEDULE</button>' +
+      '<button class="uiBtn primary" id="pClose">CLOSE</button>';
+    document.getElementById('pClose').onclick = closeUI;
+    document.getElementById('pAmend').onclick = () => { renderPortalForm(body, true); };
+    return;
+  }
+
+  renderPortalForm(body, false);
+}
+
+function renderPortalForm(body, amending) {
+  let rows = '';
+  placed.forEach((c, i) => {
+    rows += '<tr><td>' + pad2(i+1) + '</td>' +
+      '<td><input id="pName' + i + '" value="' + esc(c.name) + '" maxlength="18"></td>' +
+      '<td>' + c.type.name + '</td>' +
+      '<td><select id="pAlarm' + i + '">' +
+      ALARM_OPTS.map(o => '<option value="' + o[0] + '"' + (c.alarm === o[0] && o[0] ? ' selected' : '') + '>' + (o[1] || '\u2014 SELECT \u2014') + '</option>').join('') +
+      '</select></td></tr>';
+  });
+  body.innerHTML =
+    (configDirty ? '<p style="color:#b3261e"><b>SITE CONFIGURATION CHANGED.</b> Resubmit the schedule.</p>' : '') +
+    '<p>New connection &middot; signalling schedule</p>' +
+    '<label>SITE NAME</label><input id="pSite" value="' + esc(LEVEL.name) + '">' +
+    '<label>EXTERNAL IP ADDRESS</label><input id="pIp" placeholder="0.0.0.0">' +
+    '<label>OPEN PORT</label><input id="pPort" placeholder="port number" style="max-width:120px">' +
+    '<table><tr><th>#</th><th>CAMERA NAME</th><th>TYPE</th><th>ALARM ACTION</th></tr>' + rows + '</table>' +
+    '<div class="errs" id="pErrs"></div>' +
+    '<div style="margin-top:12px">' +
+    '<button class="uiBtn primary" id="pSubmit">' + (amending || configDirty ? 'RESUBMIT SCHEDULE' : 'SUBMIT SCHEDULE') + '</button>' +
+    '<button class="uiBtn plain" id="pClose">CLOSE</button></div>';
+  document.getElementById('pClose').onclick = closeUI;
+  document.getElementById('pSubmit').onclick = submitPortal;
+}
+
+function submitPortal() {
+  const errs = [];
+  if (!surveyPass) errs.push('SITE SURVEY NO LONGER PASSES. Restore coverage and zones first.');
+  const site = document.getElementById('pSite').value.trim();
+  const ip   = document.getElementById('pIp').value.trim();
+  const port = document.getElementById('pPort').value.trim();
+  if (!site) errs.push('SITE NAME is required.');
+  if (ip !== wanIP) errs.push('EXTERNAL IP does not resolve to this site. Check the router.');
+  if (port !== ARC_PORT) errs.push('No response on port "' + esc(port || '?') + '". Check the router\u2019s port forwarding.');
+
+  const names = [];
+  placed.forEach((c, i) => {
+    const nm = document.getElementById('pName' + i).value.trim();
+    const al = document.getElementById('pAlarm' + i).value;
+    if (!nm) errs.push('Camera ' + pad2(i+1) + ' needs a name.');
+    else if (names.includes(nm.toLowerCase())) errs.push('Camera name "' + esc(nm) + '" is used twice. Names must be unique.');
+    else names.push(nm.toLowerCase());
+    if (!al) errs.push('Camera "' + esc(nm || pad2(i+1)) + '" has no alarm action selected.');
+    else if (c.type.id === 'anpr' && al !== 'view') errs.push('"' + esc(nm) + '" (ANPR): ANPR channels must be VIEW ONLY.');
+    else if (c.type.id === 'thermal' && al !== 'thermal') errs.push('"' + esc(nm) + '" (THERMAL): thermal channels must signal THERMAL.');
+  });
+
+  if (errs.length) {
+    document.getElementById('pErrs').innerHTML = errs.map(e => '\u2717 ' + e).join('<br>');
+    return;
+  }
+
+  placed.forEach((c, i) => {
+    c.name  = document.getElementById('pName' + i).value.trim();
+    c.alarm = document.getElementById('pAlarm' + i).value;
+  });
+  scheduleSubmitted = true;
+  configDirty = false;
+  if (!packIssued) {
+    packIssued = true;
+    smtpPack = {
+      server: 'smtp.arc-monitoring.net',
+      port: '587',
+      email: 'unit1-' + Math.floor(1000 + Math.random()*9000) + '@alarms.arc-monitoring.net',
+    };
+    provisionRemaining = PROVISION_S;
+  }
+  updateStageChip();
+  renderPortal();
+}
+
+/* ---- NVR ---- */
+function renderNVR() {
+  const body = document.getElementById('nvrBody');
+  const stat =
+    walkDone ? '<span class="ok">ARC CONNECTED \u2713 \u00B7 SITE ON WATCH</span>' :
+    configDirty ? '<span class="warn">CONFIG CHANGED \u00B7 RESUBMIT SCHEDULE ON PORTAL</span>' :
+    nvrConnected ? '<span class="ok">ARC CONNECTED \u2713</span>' :
+    scheduleSubmitted ? '<span class="warn">EMAIL ALARMS: NOT CONFIGURED</span>' :
+    '<span class="bad">AWAITING ARC SCHEDULE (USE LAPTOP PORTAL)</span>';
+  body.innerHTML =
+    '<div class="nh">NVR \u00B7 ' + esc(LEVEL.name) + '</div>' +
+    '<div class="stat">STATUS: ' + stat + '</div>' +
+    '<button class="uiBtn" id="nLive">LIVE VIEW</button>' +
+    '<div style="margin-top:14px;border-top:1px solid rgba(255,255,255,.15);padding-top:8px">' +
+    '<div style="letter-spacing:.16em;font-size:10.5px;color:var(--osd-dim)">NETWORK \u00B7 EMAIL ALARM SETTINGS</div>' +
+    '<label>SMTP SERVER</label><input id="nSrv" value="' + (nvrConnected ? smtpPack.server : '') + '">' +
+    '<label>SMTP PORT</label><input id="nPort" style="max-width:120px" value="' + (nvrConnected ? smtpPack.port : '') + '">' +
+    '<label>ALARM EMAIL ADDRESS</label><input id="nMail" value="' + (nvrConnected ? smtpPack.email : '') + '">' +
+    '<div id="nMsg" style="margin:8px 0"></div>' +
+    '<button class="uiBtn" id="nSave">TEST &amp; SAVE</button>' +
+    '<button class="uiBtn" id="nClose">CLOSE</button></div>';
+  document.getElementById('nClose').onclick = closeUI;
+  document.getElementById('nLive').onclick = () => { closeUI(); enterFeed(); };
+  document.getElementById('nSave').onclick = () => {
+    const msg = document.getElementById('nMsg');
+    if (!smtpPack) { msg.innerHTML = '<span class="bad">\u2717 NO ARC ACCOUNT DETAILS. Lodge a schedule on the portal first.</span>'; return; }
+    const ok =
+      document.getElementById('nSrv').value.trim().toLowerCase()  === smtpPack.server &&
+      document.getElementById('nPort').value.trim()               === smtpPack.port &&
+      document.getElementById('nMail').value.trim().toLowerCase() === smtpPack.email;
+    if (ok) {
+      nvrConnected = true;
+      msg.innerHTML = '<span class="ok">\u2713 TEST EMAIL DELIVERED. ARC CONNECTED.</span>';
+      updateStageChip();
+      renderNVR();
+    } else {
+      msg.innerHTML = '<span class="bad">\u2717 CONNECTION TEST FAILED. Check the details against the portal.</span>';
+    }
+  };
+}
+
+/* ---------------- NVR live feed view ---------------- */
+
+const feedName = document.getElementById('feedName');
+const feedTime = document.getElementById('feedTime');
+const noSignal = document.getElementById('noSignal');
+let feedIndex = 0;
+let prevPtVisible = true, prevRoofVisible = true;
+let hiddenBody = null;
+
+function showHiddenBody() { if (hiddenBody) { hiddenBody.visible = true; hiddenBody = null; } }
+function hideFeedBody() {
+  showHiddenBody();
+  if (placed.length) { hiddenBody = placed[feedIndex].body; hiddenBody.visible = false; }
+}
+
+const UP_Y = new THREE.Vector3(0, 1, 0);
+const UP_Z = new THREE.Vector3(0, 0, -1);
+const _t = new THREE.Vector3();
+
+function enterFeed() {
+  mode = 'feed';
+  document.body.classList.add('feed');
+  prevPtVisible = ptCloud.visible;
+  prevRoofVisible = roofMesh ? roofMesh.visible : true;
+  ptCloud.visible = false;
+  fovRoot.visible = false;
+  ghostRoot.visible = false;
+  if (roofMesh) roofMesh.visible = true;
+  feedIndex = Math.min(feedIndex, Math.max(0, placed.length - 1));
+  hideFeedBody();
+  updateFeedOSD();
+}
+function exitFeed() {
+  mode = 'fp';
+  document.body.classList.remove('feed');
+  showHiddenBody();
+  ptCloud.visible = prevPtVisible;
+  fovRoot.visible = true;
+  if (roofMesh) roofMesh.visible = prevRoofVisible;
+}
+function cycleFeed(dir) {
+  if (!placed.length) return;
+  feedIndex = (feedIndex + dir + placed.length) % placed.length;
+  hideFeedBody();
+  updateFeedOSD();
+}
+function updateFeedOSD() {
+  if (!placed.length) { noSignal.style.display = 'flex'; feedName.textContent = 'CAM --'; return; }
+  noSignal.style.display = 'none';
+  const c = placed[feedIndex];
+  feedName.textContent = esc(c.name) + ' \u00B7 ' + c.type.name;
+}
+function updateFeedClock() {
+  const d = new Date();
+  feedTime.textContent =
+    pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' +
+    pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+}
+function updateFeedCam() {
+  const c = placed[feedIndex];
+  feedCam.position.copy(c.origin);
+  feedCam.up.copy(Math.abs(c.dir.y) > 0.95 ? UP_Z : UP_Y);
+  _t.copy(c.origin).add(c.dir);
+  feedCam.lookAt(_t);
+  const hfov = Math.min(c.type.fov, 140);
+  feedCam.fov = clamp(R2D(2 * Math.atan(Math.tan(D2R(hfov / 2)) / feedCam.aspect)), 20, 130);
+  feedCam.updateProjectionMatrix();
+}
+
+/* ---------------- interactables ---------------- */
+
+const intPrompt = document.getElementById('intPrompt');
+const interactables = [
+  { label:'NVR',          x:nvrPos.x, z:nvrPos.z + 1.0, r:2.0, avail:() => true, act:() => openUI('nvr') },
+  { label:'ROUTER',       x:LEVEL.router.x, z:LEVEL.router.z + 0.55, r:1.8, avail:() => true, act:() => openUI('router') },
+  { label:'ARC PORTAL',   x:0, z:0, r:1.9, avail:() => !!laptopGroup, act:() => openUI('portal'), laptop:true },
+  { label:'SIT IN VAN',   x:LEVEL.van.x + 1.6, z:LEVEL.van.z + 1.5, r:1.9, avail:() => true, act:enterVan },
+  { label:'SMOKE BREAK',  x:LEVEL.van.x - 2.4, z:LEVEL.van.z + 1.5, r:1.9, avail:() => tNow > smokeCDUntil && tNow > smokeUntil, act:startSmoke },
+];
+
+function nearestInteractable() {
+  let best = null, bestD = 1e9;
+  for (const it of interactables) {
+    if (!it.avail()) continue;
+    const ix = it.laptop ? laptopGroup.position.x : it.x;
+    const iz = it.laptop ? laptopGroup.position.z : it.z;
+    const d = Math.hypot(player.x - ix, player.z - iz);
+    if (d < it.r && d < bestD) { best = it; bestD = d; }
+  }
+  return best;
+}
+
+/* ---------------- van / pastimes ---------------- */
+
+const feedApp = document.getElementById('feedApp');
+const vanHint = document.getElementById('vanHint');
+const FEED_POSTS = [
+  ['Dave M', 'Anyone else\u2019s bins not been collected since TUESDAY?? Absolute state of this council.', '47 comments'],
+  ['Marketplace', 'TaylorMade golf bag, black/tan, discontinued colourway. Collection only. \u00A345 ono. No timewasters.', '12 saves'],
+  ['HustleGrind Kev', 'Rise and grind. 4am cold shower then 200 emails. The algorithm doesn\u2019t sleep and neither do I.', '2 likes'],
+  ['Sandra B', 'Found this cat in my garden. Is it anyone\u2019s? It has opinions.', '312 comments'],
+  ['Local News', 'Roadworks on the ring road enter their 14th year. Officials remain "optimistic".', '1.1k angry reacts'],
+  ['Gaz', 'Selling alloys. No tyres. Slight buckle. Mint condition.', '3 offers'],
+  ['Aunty Pam', 'HAPPY BIRTHDAY to my wonderful nephew!! (posted on her own wall)', '6 likes'],
+  ['Quiz Time', 'Which type of CCTV camera are you? I got FISHEYE \uD83D\uDE02 tag an engineer', '89 shares'],
+  ['Lee', 'Anyone know a good sparky? ASAP. It\u2019s urgent. Won\u2019t say why.', '230 comments'],
+  ['Memes4Engineers', '"Just one more cable tie" \u2014 me, 400 cable ties later.', '4.5k likes'],
+  ['Marketplace', 'Wardrobe, free, you dismantle. Currently full of wasps.', '78 shares'],
+  ['Tina', 'The gym was PACKED today. Anyway here\u2019s my protein pancake.', '15 likes'],
+  ['Group Admin', 'REMINDER this is a POSITIVE group. Karen has been removed.', '502 comments'],
+  ['Sponsored', 'Earn \u00A3900/day working from your van!! Engineers HATE this one weird trick.', 'Sponsored'],
+  ['Big Trev', 'Lost my phone last night. If found, message my phone.', '41 laughs'],
+  ['Nostalgia UK', 'Who remembers dial-up? Like if you survived 56k.', '12k likes'],
+];
+let feedIdx = 0;
+
+function renderFeedApp() {
+  let h = '';
+  for (let i = 0; i < 4; i++) {
+    const p = FEED_POSTS[(feedIdx + i) % FEED_POSTS.length];
+    h += '<div class="fpost"><div class="fwho">' + p[0] + '</div>' + p[1] + '<div class="fmeta">' + p[2] + '</div></div>';
+  }
+  document.getElementById('feedPosts').innerHTML = h;
+}
+function scrollFeed(dir) {
+  feedIdx = (feedIdx + dir + FEED_POSTS.length) % FEED_POSTS.length;
+  renderFeedApp();
+}
+
+function enterVan() {
+  vanMode = true;
+  prevPlayerState = { x:player.x, z:player.z, yaw:player.yaw, pitch:player.pitch };
+  feedApp.style.display = 'block';
+  vanHint.style.display = 'block';
+  ghostRoot.visible = false;
+  aimMsg.textContent = '';
+  renderFeedApp();
+}
+function exitVan() {
+  vanMode = false;
+  feedApp.style.display = 'none';
+  vanHint.style.display = 'none';
+  if (prevPlayerState) Object.assign(player, prevPlayerState);
+}
+
+function startSmoke() {
+  smokeUntil = tNow + SMOKE_TIME;
+  smokeCDUntil = tNow + SMOKE_TIME + SMOKE_CD;
+  smokePending = true;
+}
+
+// smoke puffs
+const puffs = [];
+for (let i = 0; i < 8; i++) {
+  const m = new THREE.Mesh(
+    new THREE.SphereGeometry(0.05, 6, 5),
+    new THREE.MeshBasicMaterial({ color:0xc8ccd0, transparent:true, opacity:0 })
+  );
+  m.visible = false; scene.add(m);
+  puffs.push({ m, life: -1 });
+}
+let puffTimer = 0;
+const _fwd = new THREE.Vector3();
+
+function updateSmoke(dt) {
+  const smoking = tNow < smokeUntil;
+  if (!smoking && smokePending) {
+    smokePending = false;
+    provisionRemaining = Math.max(0, provisionRemaining - SMOKE_SKIP);
+  }
+  if (smoking) {
+    puffTimer -= dt;
+    if (puffTimer <= 0) {
+      puffTimer = 0.45;
+      const p = puffs.find(p => p.life < 0);
+      if (p) {
+        camera.getWorldDirection(_fwd);
+        p.m.position.set(
+          camera.position.x + _fwd.x * 0.45 + (Math.random()-0.5)*0.1,
+          camera.position.y - 0.18,
+          camera.position.z + _fwd.z * 0.45 + (Math.random()-0.5)*0.1
+        );
+        p.life = 0; p.m.visible = true;
+      }
+    }
+  }
+  for (const p of puffs) {
+    if (p.life < 0) continue;
+    p.life += dt;
+    p.m.position.y += dt * 0.45;
+    p.m.material.opacity = Math.max(0, 0.5 - p.life * 0.4);
+    p.m.scale.setScalar(1 + p.life * 1.4);
+    if (p.life > 1.4) { p.life = -1; p.m.visible = false; }
+  }
+  return smoking;
+}
+
+function updateLunch() {
+  if (lunchPending && tNow >= lunchUntil) {
+    lunchPending = false;
+    provisionRemaining = Math.max(0, provisionRemaining - LUNCH_SKIP);
+  }
+}
+
+/* ---------------- walk test ---------------- */
+
+function phoneReady() {
+  return scheduleSubmitted && !configDirty && provisionRemaining <= 0 &&
+         nvrConnected && !walkDone && !call;
+}
+
+function startCall() {
+  const order = shuffle(placed.filter(c => c.alarm && c.alarm !== 'view').slice());
+  call = { order, idx:0, progress:0, lines:[] };
+  call.lines.push('"Arc Monitoring, go ahead."');
+  call.lines.push('"Walk test for ' + esc(LEVEL.name) + ', ' + order.length + ' channels to prove."');
+  if (!order.length) finishCall();
+  else call.lines.push('"Activate ' + esc(order[0].name) + ' for me please."');
+}
+
+function finishCall() {
+  walkDone = true;
+  call = null;
+  updateStageChip();
+  openWin();
+}
+
+function updateCall(dt) {
+  if (!call || call.idx >= call.order.length) return;
+  const target = call.order[call.idx];
+  const seen = camSees(target, player.x, WALK_Y, player.z);
+  if (seen) call.progress += dt;
+  else call.progress = Math.max(0, call.progress - dt * 2);
+  if (call.progress >= WALK_HOLD) {
+    const kind = target.alarm === 'thermal' ? 'Thermal activation' : 'Intrusion';
+    call.lines.push('"' + kind + ' received, ' + esc(target.name) + '."');
+    call.idx++;
+    call.progress = 0;
+    if (call.idx >= call.order.length) {
+      call.lines.push('"That\u2019s everything proving. Site\u2019s on watch. Nice work."');
+      setTimeout(() => { if (call) finishCall(); }, 1200);
+    } else {
+      call.lines.push('"Next one: activate ' + esc(call.order[call.idx].name) + '."');
+    }
+  }
+}
+
+/* ---------------- phone HUD ---------------- */
+
+const phone = document.getElementById('phone');
+const phoneScreen = document.getElementById('phoneScreen');
+
+function updatePhone() {
+  if (!scheduleSubmitted || mode !== 'fp' || uiOpen) { phone.style.display = 'none'; return; }
+  phone.style.display = 'block';
+  let h = '<div class="pTitle">ARC MONITORING</div>';
+
+  if (call) {
+    h += '<div class="pDim">ON CALL \u00B7 0117 496 0900</div>';
+    h += call.lines.slice(-3).map(l => '<div>' + l + '</div>').join('');
+    if (call.idx < call.order.length) {
+      h += '<div class="pBar"><i style="width:' + Math.min(100, call.progress / WALK_HOLD * 100) + '%"></i></div>';
+      h += '<div class="pDim">TARGET: <b style="color:var(--osd)">' + esc(call.order[call.idx].name) + '</b></div>';
+    }
+  } else if (walkDone) {
+    h += '<div class="pBig pOk">JOB COMPLETE \u2713</div><div class="pDim">Site is on watch.</div>';
+  } else if (configDirty) {
+    h += '<div class="pWarn">CONFIG CHANGED</div><div class="pDim">Resubmit the schedule on the portal.</div>';
+  } else if (provisionRemaining > 0) {
+    h += '<div class="pDim">PROVISIONING</div><div class="pBig">' + fmtMSS(provisionRemaining) + '</div>';
+    h += '<div class="pDim">' + (vanMode ? 'time x' + VAN_TIMESCALE + ' \u2713' : 'pass the time in the van') + '</div>';
+  } else if (!nvrConnected) {
+    h += '<div class="pOk">PROVISIONED \u2713</div><div class="pDim">Enter the email settings on the NVR.</div>';
+  } else {
+    h += '<div class="pOk">SITE READY</div><div class="pDim">Press <b style="color:var(--osd)">C</b> to call the ARC for the walk test.</div>';
+  }
+
+  if (tNow < smokeUntil) h += '<div class="pDim">SMOKE BREAK\u2026</div>';
+  if (lunchPending) {
+    const pct = Math.min(100, (1 - (lunchUntil - tNow) / LUNCH_TIME) * 100);
+    h += '<div class="pBar"><i style="width:' + pct + '%"></i></div><div class="pDim">EATING LUNCH\u2026</div>';
+  }
+  phoneScreen.innerHTML = h;
+}
+
+/* ---------------- look label ---------------- */
+
+function updateLookLabel() {
+  const cam = lookedAtCamera();
+  if (cam) {
+    lookLabel.innerHTML = '<b>' + esc(cam.name) + '</b> <span>\u00B7 ' + cam.type.name +
+      (cam.alarm ? ' \u00B7 ' + (cam.alarm === 'view' ? 'VIEW ONLY' : cam.alarm.toUpperCase()) : '') +
+      ' \u00B7 E REMOVE</span>';
+    lookLabel.style.display = 'block';
+  } else lookLabel.style.display = 'none';
+}
+
+/* ---------------- hotbar UI ---------------- */
+
+const hotbar = document.getElementById('hotbar');
+CAM_TYPES.forEach((t, i) => {
+  const el = document.createElement('div');
+  el.className = 'slot';
+  el.innerHTML =
+    '<div class="num">' + (i + 1) + '</div>' +
+    '<div class="nm">' + t.name + '</div>' +
+    '<div class="meta">' + (t.item ? 'FLAT SURFACE \u00B7 ARC PORTAL' :
+      t.mount.map(m => m === 'ceiling' ? 'CEIL' : 'WALL').join('/') +
+      ' \u00B7 ' + (t.fov >= 180 ? '360\u00B0' : t.fov + '\u00B0') + ' \u00B7 ' + t.range + 'm') + '</div>' +
+    '<div class="cost">' + (t.cost ? '\u00A3' + t.cost : 'FREE') + '</div>';
+  el.addEventListener('click', () => selectSlot(i));
+  hotbar.appendChild(el);
+});
+
+function selectSlot(i) {
+  selected = i;
+  [...hotbar.children].forEach((el, j) => el.classList.toggle('sel', j === selected));
+  rebuildGhost();
+}
+
+/* ---------------- input ---------------- */
+
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+
+  if (uiOpen) { if (e.code === 'Escape') closeUI(); return; }
+  if (!locked) return;
+  if (winOpen && e.code === 'Enter') { closeWin(); return; }
+
+  if (mode === 'feed') {
+    if (e.code === 'KeyQ') exitFeed();
+    else if (e.code === 'KeyA' || e.code === 'ArrowLeft')  cycleFeed(-1);
+    else if (e.code === 'KeyD' || e.code === 'ArrowRight') cycleFeed(1);
+    return;
+  }
+
+  if (vanMode) {
+    if (e.code === 'KeyQ') exitVan();
+    else if (e.code === 'KeyL' && !lunchEaten) { lunchEaten = true; lunchPending = true; lunchUntil = tNow + LUNCH_TIME; }
+    return;
+  }
+
+  if (e.code.startsWith('Digit')) {
+    const n = +e.code.slice(5) - 1;
+    if (n >= 0 && n < CAM_TYPES.length) selectSlot(n);
+  }
+  else if (e.code === 'KeyE') removeLooked();
+  else if (e.code === 'KeyF') { fovVisible = !fovVisible; placed.forEach(c => c.cone.visible = fovVisible); }
+  else if (e.code === 'KeyG') ptCloud.visible = !ptCloud.visible;
+  else if (e.code === 'KeyR') { if (roofMesh) roofMesh.visible = !roofMesh.visible; }
+  else if (e.code === 'KeyQ') { const it = nearestInteractable(); if (it) it.act(); }
+  else if (e.code === 'KeyC') { if (phoneReady()) startCall(); }
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+document.addEventListener('mousedown', e => {
+  if (!locked || e.button !== 0) return;
+  if (winOpen) { closeWin(); return; }
+  if (mode === 'fp' && !vanMode && tNow >= smokeUntil) placeCurrent();
+});
+
+/* ---------------- HUD init ---------------- */
+
+document.getElementById('covTarget').textContent = '/ TARGET ' + LEVEL.target + '%';
+document.getElementById('siteName').textContent = LEVEL.name;
+document.getElementById('overlayBrief').innerHTML =
+  'Site: ' + LEVEL.name + '. <b>Install:</b> reach ' + LEVEL.target + '% coverage within the ' +
+  '&pound;' + LEVEL.budget.toLocaleString('en-GB') + ' budget; the gate needs ANPR, the refuse ' +
+  'store and flammable goods area need thermal; wall mounts 2m+. <b>Commission:</b> place your ' +
+  'laptop, lodge the signalling schedule on the ARC portal (the router has the connection details), ' +
+  'then enter the SMTP settings on the NVR and wait out provisioning. <b>Walk test:</b> phone the ' +
+  'ARC and activate each signalling camera on request.';
+
+/* ---------------- main loop ---------------- */
+
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  tNow += dt;
+
+  // provisioning clock
+  if (provisionRemaining > 0) {
+    provisionRemaining = Math.max(0, provisionRemaining - dt * (vanMode ? VAN_TIMESCALE : 1));
+    if (provisionRemaining === 0) updateStageChip();
+  }
+  const smoking = updateSmoke(dt);
+  updateLunch();
+
+  if (mode === 'fp') {
+    if (vanMode) {
+      camera.position.set(VAN_SEAT.x, VAN_SEAT.y, VAN_SEAT.z);
+      camera.rotation.y = VAN_SEAT.yaw;
+      camera.rotation.x = 0;
+      intPrompt.style.display = 'none';
+      lookLabel.style.display = 'none';
+    } else {
+      if (locked && !smoking && !uiOpen) movePlayer(dt);
+      camera.position.set(player.x, EYE_HEIGHT, player.z);
+      camera.rotation.y = player.yaw;
+      camera.rotation.x = player.pitch;
+
+      if (locked && !uiOpen) {
+        updateGhost();
+        updateLookLabel();
+        const it = nearestInteractable();
+        if (it) { intPrompt.innerHTML = '<b>Q</b> &nbsp;' + it.label; intPrompt.style.display = 'block'; }
+        else intPrompt.style.display = 'none';
+      } else {
+        ghostRoot.visible = false; aimMsg.textContent = '';
+        intPrompt.style.display = 'none'; lookLabel.style.display = 'none';
+      }
+    }
+    if (call) updateCall(dt);
+    updatePhone();
+    renderer.render(scene, camera);
+  } else {
+    updateFeedClock();
+    if (placed.length) {
+      updateFeedCam();
+      renderer.render(scene, feedCam);
+    }
+  }
+}
+
+selectSlot(0);
+recompute();
+animate();
+</script>
+</body>
+</html>
