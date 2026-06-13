@@ -631,27 +631,68 @@ addFlat(-16, 4, 5, 14, MATS.road, -0.05);          // car park pad
 for (let x = -20; x <= 20; x += 4) addBox(x, -0.03, 20, 1.6, 0.02, 0.18, matRoadLine, {});
 addBox(5, -0.03, 17.7, 3.0, 0.02, 0.3, matRoadLine, {});
 
+/* ---------------- exterior cladding ---------------- */
+// Brick base band + brand fascia stripe on each exterior face; the light upper
+// wall reads as profiled metal cladding. Decorative facings, proud of the wall.
+const matBrick  = new THREE.MeshLambertMaterial({ color:0x8f5d4a });
+const matFascia = new THREE.MeshLambertMaterial({ color:0x16807e });
+// horizontal faces (north/south), band length along x
+function cladH(cx, z, len) {
+  addBox(cx, 0.55, z, len, 1.1,  0.06, matBrick,  {});
+  addBox(cx, 2.7,  z, len, 0.34, 0.06, matFascia, {});
+}
+// vertical faces (east/west), band length along z
+function cladV(x, cz, len) {
+  addBox(x, 0.55, cz, 0.06, 1.1,  len, matBrick,  {});
+  addBox(x, 2.7,  cz, 0.06, 0.34, len, matFascia, {});
+}
+cladH(0, -6.18, 18.6);            // north
+cladH(-6.5, 6.18, 5.0);           // south, west of the door
+cladH(3.5,  6.18, 11.0);          // south, east of the door
+cladV(9.18,  0, 12.6);            // east
+cladV(-9.18, 0, 12.6);            // west
+
 // NVR desk + monitor + recorder
 const nvrPos = LEVEL.nvr;
-addBox(nvrPos.x, 0.375, nvrPos.z, 1.3, 0.75, 0.6, MATS.desk, { collide:1, occlude:1, place:1 });
-addBox(nvrPos.x, 0.81, nvrPos.z - 0.1, 0.09, 0.12, 0.09, matBodyB, {});
-addBox(nvrPos.x, 1.06, nvrPos.z - 0.12, 0.56, 0.37, 0.05, matBodyB, {});
+const np = nvrPos;
+const ledMat = c => new THREE.MeshBasicMaterial({ color:c });
+addBox(np.x, 0.375, np.z, 1.3, 0.75, 0.6, MATS.desk, { collide:1, occlude:1, place:1 });   // desk
+// monitor showing a CCTV multiview, faces the player (+z)
+addBox(np.x, 0.775, np.z - 0.15, 0.2,  0.03, 0.13, matBodyB, {});   // stand base
+addBox(np.x, 0.93,  np.z - 0.16, 0.04, 0.3,  0.04, matBodyB, {});   // neck
+addBox(np.x, 1.13,  np.z - 0.17, 0.64, 0.42, 0.04, matBodyB, {});   // bezel
 {
-  const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.31), matScreen);
-  sc.position.set(nvrPos.x, 1.06, nvrPos.z - 0.094);
-  scene.add(sc);
+  const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.34), matScreen);
+  sc.position.set(np.x, 1.13, np.z - 0.148); scene.add(sc);
+  const grid = new THREE.MeshBasicMaterial({ color:0x0a1418 });
+  const vl = new THREE.Mesh(boxGeo, grid); vl.scale.set(0.01, 0.34, 0.012); vl.position.set(np.x, 1.13, np.z - 0.147); scene.add(vl);
+  const hl = new THREE.Mesh(boxGeo, grid); hl.scale.set(0.56, 0.01, 0.012); hl.position.set(np.x, 1.13, np.z - 0.147); scene.add(hl);
+  const pl = new THREE.Mesh(boxGeo, ledMat(0x6fe39a)); pl.scale.set(0.016, 0.016, 0.01); pl.position.set(np.x + 0.28, 0.95, np.z - 0.15); scene.add(pl);
 }
-addBox(nvrPos.x + 0.1, 0.82, nvrPos.z + 0.12, 0.42, 0.14, 0.35, matBodyA, {});
+// NVR recorder unit on the desk
+addBox(np.x + 0.4, 0.80, np.z + 0.02, 0.5,  0.1,  0.34, matBodyB, {});   // chassis
+addBox(np.x + 0.4, 0.80, np.z + 0.19, 0.46, 0.08, 0.02, matBodyA, {});   // front panel
+addBox(np.x + 0.5, 0.80, np.z + 0.20, 0.12, 0.05, 0.015, matBodyB, {});  // drive bay
+[0x6fe39a, 0x6fe39a, 0xffc24d].forEach((c, i) => {
+  const l = new THREE.Mesh(boxGeo, ledMat(c)); l.scale.set(0.02, 0.02, 0.012); l.position.set(np.x + 0.26 + i*0.05, 0.82, np.z + 0.20); scene.add(l);
+});
+// keyboard + mouse
+addBox(np.x - 0.2,  0.765, np.z + 0.16, 0.4,  0.02,  0.14, matBodyB, {});
+addBox(np.x - 0.2,  0.776, np.z + 0.16, 0.37, 0.006, 0.12, matBodyA, {});
+addBox(np.x + 0.12, 0.765, np.z + 0.18, 0.06, 0.02,  0.09, matBodyB, {});
 
-// Router on the north wall near the desk
+// Router, wall-mounted near the desk, faces the player (+z)
 {
   const r = LEVEL.router;
-  addBox(r.x, r.y, r.z, 0.26, 0.16, 0.07, matBodyA, {});
-  const ant = new THREE.CylinderGeometry(0.012, 0.012, 0.14, 6);
-  for (const dx of [-0.08, 0.08]) {
+  addBox(r.x, r.y, r.z, 0.32, 0.2, 0.06, matBodyA, {});                 // body
+  addBox(r.x, r.y, r.z + 0.031, 0.3, 0.18, 0.006, matBodyB, {});        // front fascia
+  [0x6fe39a, 0x6fe39a, 0xffc24d, 0x4db8ff].forEach((c, i) => {          // status LEDs
+    const l = new THREE.Mesh(boxGeo, ledMat(c)); l.scale.set(0.02, 0.02, 0.01); l.position.set(r.x - 0.1 + i*0.05, r.y + 0.05, r.z + 0.036); scene.add(l);
+  });
+  const ant = new THREE.CylinderGeometry(0.012, 0.012, 0.18, 6);        // three antennas, outer pair splayed
+  for (const [dx, tilt] of [[-0.11, 0.5], [0, 0], [0.11, -0.5]]) {
     const a = new THREE.Mesh(ant, matBodyB);
-    a.position.set(r.x + dx, r.y + 0.14, r.z);
-    scene.add(a);
+    a.position.set(r.x + dx, r.y + 0.16, r.z); a.rotation.z = tilt; scene.add(a);
   }
 }
 
@@ -686,8 +727,31 @@ addBox(nvrPos.x + 0.1, 0.82, nvrPos.z + 0.12, 0.42, 0.14, 0.35, matBodyA, {});
   for (const [wx, wz] of [[v.x-1.3, v.z-1.0],[v.x-1.3, v.z+1.0],[v.x+1.6, v.z-1.0],[v.x+1.6, v.z+1.0]]) {
     const w = new THREE.Mesh(wg, matBodyB); w.position.set(wx, 0.42, wz); scene.add(w);
   }
+
+  // --- cab interior: dressed so it reads as sitting in the cockpit ---
+  // (you sit at the +z driver side and look out the +x windscreen)
+  const matCab   = new THREE.MeshLambertMaterial({ color:0x2a2d31 });
+  const matSeat  = new THREE.MeshLambertMaterial({ color:0x3a3f44 });
+  const matLiner = new THREE.MeshLambertMaterial({ color:0xb7b3a8 });
+  const dz = v.z + 0.45;   // driver line
+  addBox(v.x + 1.35, 1.12, v.z, 0.4, 0.42, W - 0.2, matCab, {});       // dashboard
+  addBox(v.x - 0.15, 1.25, v.z, 0.06, 1.7, W - 0.1, matCab, {});       // rear bulkhead
+  addBox(v.x + 0.7,  2.18, v.z, 1.9, 0.06, W - 0.1, matLiner, {});     // roof liner
+  for (const sz of [-(W/2) + 0.06, (W/2) - 0.06])
+    addBox(v.x + 0.65, 1.15, v.z + sz, 1.8, 1.3, 0.05, matCab, {});    // door cards
+  for (const sz of [dz, v.z - 0.45]) {                                 // driver + passenger seats
+    addBox(v.x + 0.55, 0.95, sz, 0.55, 0.14, 0.55, matSeat, {});       // squab
+    addBox(v.x + 0.28, 1.32, sz, 0.12, 0.72, 0.55, matSeat, {});       // backrest
+  }
+  // steering wheel + column + gear lever
+  const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.026, 8, 18), matCab);
+  wheel.position.set(v.x + 1.02, 1.16, dz); wheel.rotation.y = Math.PI/2; wheel.rotation.z = 0.42; scene.add(wheel);
+  const colG = new THREE.CylinderGeometry(0.025, 0.025, 0.4, 6); colG.rotateZ(Math.PI/2);
+  const col = new THREE.Mesh(colG, matCab); col.position.set(v.x + 1.2, 1.1, dz); scene.add(col);
+  const lever = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.22, 6), matCab);
+  lever.position.set(v.x + 1.2, 1.18, v.z); scene.add(lever);
 }
-const VAN_SEAT = { x: LEVEL.van.x + 1.6, y: 1.45, z: LEVEL.van.z, yaw: Math.PI };
+const VAN_SEAT = { x: LEVEL.van.x + 0.55, y: 1.5, z: LEVEL.van.z + 0.45, yaw: -Math.PI/2 };
 
 /* ---------------- perimeter fence + gates ---------------- */
 // Galvanised steel palisade. Posts and bars are decorative meshes; the two
