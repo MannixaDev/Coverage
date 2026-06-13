@@ -599,6 +599,59 @@ addBox(nvrPos.x + 0.1, 0.82, nvrPos.z + 0.12, 0.42, 0.14, 0.35, matBodyA, {});
 }
 const VAN_SEAT = { x: LEVEL.van.x + 1.6, y: 1.32, z: LEVEL.van.z + 0.45, yaw: -Math.PI/2 };
 
+/* ---------------- perimeter fence + gates ---------------- */
+// Galvanised steel palisade. Posts and bars are decorative meshes; the two
+// rails per run double as the player collider so the perimeter contains you.
+// Not occluders: too thin to meaningfully block a camera sightline.
+const matFence = new THREE.MeshLambertMaterial({ color:0x8a9299 });
+{
+  const FX0 = -15, FX1 = 14.5, FZ0 = -10, FZ1 = 14;   // perimeter extents
+  const POST_H = 1.5, RAIL_Y = [0.5, 1.2];
+  const postGeo = new THREE.CylinderGeometry(0.06, 0.06, POST_H, 8);
+  const capGeo  = new THREE.ConeGeometry(0.08, 0.12, 8);
+
+  function fencePost(x, z) {
+    const p = new THREE.Mesh(postGeo, matFence);
+    p.position.set(x, POST_H/2, z);
+    scene.add(p);
+    const c = new THREE.Mesh(capGeo, matFence);
+    c.position.set(x, POST_H + 0.06, z);
+    scene.add(c);
+  }
+  // a straight run: posts every ~2 m, two rails that also collide
+  function fenceRun(x0, z0, x1, z1) {
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    const n = Math.max(1, Math.round(len / 2));
+    for (let i = 0; i <= n; i++) fencePost(x0 + (x1-x0)*i/n, z0 + (z1-z0)*i/n);
+    const cx = (x0+x1)/2, cz = (z0+z1)/2;
+    const horiz = Math.abs(x1-x0) > Math.abs(z1-z0);
+    const sx = horiz ? len : 0.07, sz = horiz ? 0.07 : len;
+    for (const ry of RAIL_Y) addBox(cx, ry, cz, sx, 0.05, sz, matFence, { collide:1 });
+  }
+
+  fenceRun(FX0, FZ0, FX1, FZ0);   // north
+  fenceRun(FX0, FZ0, FX0, FZ1);   // west
+  fenceRun(FX1, FZ0, FX1, FZ1);   // east
+  // south, broken by a pedestrian gap (x -3.5..-2.5) and the vehicle gate (x 3.5..6.5)
+  fenceRun(FX0,  FZ1, -3.5, FZ1);
+  fenceRun(-2.5, FZ1,  3.5, FZ1);
+  fenceRun(6.5,  FZ1,  FX1, FZ1);
+
+  // vehicle gate, slid open and stacked against the fence east of the opening
+  function gatePanel(cx, cz, w) {
+    addBox(cx, 1.1, cz, w, 0.05, 0.05, matFence, {});   // top rail
+    addBox(cx, 0.5, cz, w, 0.05, 0.05, matFence, {});   // bottom rail
+    const bars = Math.max(2, Math.round(w / 0.28));
+    const barGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.62, 6);
+    for (let i = 0; i <= bars; i++) {
+      const b = new THREE.Mesh(barGeo, matFence);
+      b.position.set(cx - w/2 + w*i/bars, 0.8, cz);
+      scene.add(b);
+    }
+  }
+  gatePanel(8.5, FZ1, 3.4);
+}
+
 /* ---------------- player / global state ---------------- */
 
 const player = { x:LEVEL.spawn.x, z:LEVEL.spawn.z, yaw:LEVEL.spawn.yaw, pitch:0 };
