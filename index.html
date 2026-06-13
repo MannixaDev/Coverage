@@ -313,7 +313,7 @@
 <div id="hotbar"></div>
 
 <div id="hints" class="chip">
-  <b>LMB</b> place &nbsp; <b>E</b> remove &nbsp; <b>SCROLL</b> pan aim &nbsp; <b>SHIFT+SCROLL</b> tilt &nbsp; <b>Q</b> interact<br>
+  <b>LMB</b> place &nbsp; <b>E</b> remove &nbsp; <b>SCROLL</b> pan aim &nbsp; <b>SHIFT+SCROLL</b> tilt &nbsp; <b>SHIFT</b> sprint &nbsp; <b>SPACE</b> jump &nbsp; <b>Q</b> interact<br>
   <b>F</b> FOV cones &nbsp; <b>G</b> dots &nbsp; <b>R</b> roof &nbsp; <b>1-8</b> hotbar &nbsp; <b>C</b> call ARC &nbsp; <b>ESC</b> menu
 </div>
 
@@ -357,6 +357,8 @@
     <div class="brief" id="overlayBrief"></div>
     <div class="ctl">
       <b>WASD</b><span>move</span>
+      <b>Shift</b><span>sprint</span>
+      <b>Space</b><span>jump</span>
       <b>Mouse</b><span>look</span>
       <b>1 - 8</b><span>select camera / laptop</span>
       <b>Scroll</b><span>pan camera aim before placing</span>
@@ -406,10 +408,10 @@ const LEVEL = {
   budget: 3500,
   target: 80,
   spawn: { x:-3, z:9, yaw:0 },
-  bounds: { minX:-22, maxX:22, minZ:-20, maxZ:20 },
+  bounds: { minX:-22, maxX:22, minZ:-20, maxZ:21.5 },
   nvr:    { x:-7.0, z:-4.5 },
   router: { x:-6.8, y:1.6, z:-2.2 },
-  van:    { x:5, z:17 },
+  van:    { x:5, z:19.5 },
 
   boxes: [
     // building outer shell: 18 m wide (x:-9 to 9), 12 m deep (z:-6 to 6), 3 m walls
@@ -437,13 +439,13 @@ const LEVEL = {
     { x:10.4, y:0.5, z:0.6,  sx:0.8, sy:1, sz:0.8, m:'bin', c:1,o:1,p:1 },
     // flammable goods crate, east room
     { x:6, y:0.5, z:-4, sx:1, sy:1, sz:1, m:'crate', c:1,o:1,p:1 },
-    // vehicle gate posts, south approach
-    { x:3.5, y:0.6, z:13, sx:0.25, sy:1.2, sz:0.25, m:'post', c:1,o:1,p:1 },
-    { x:6.5, y:0.6, z:13, sx:0.25, sy:1.2, sz:0.25, m:'post', c:1,o:1,p:1 },
+    // vehicle gate piers, at the south fence opening
+    { x:3.5, y:0.75, z:17, sx:0.3, sy:1.5, sz:0.3, m:'post', c:1,o:1,p:1 },
+    { x:6.5, y:0.75, z:17, sx:0.3, sy:1.5, sz:0.3, m:'post', c:1,o:1,p:1 },
   ],
 
   zones: [
-    { label:'GATE',   req:'anpr',    minX:3.5,  maxX:6.5,  minZ:11.0, maxZ:14.0, color:0xffa54d, zone:'out', floorY:-0.03 },
+    { label:'GATE',   req:'anpr',    minX:3.5,  maxX:6.5,  minZ:13.5, maxZ:16.5, color:0xffa54d, zone:'out', floorY:-0.03 },
     { label:'REFUSE', req:'thermal', minX:10.0, maxX:12.5, minZ:-2.0, maxZ:2.0,  color:0xff5e8a, zone:'out', floorY:-0.03 },
     { label:'STORE',  req:'thermal', minX:5.0,  maxX:8.5,  minZ:-5.5, maxZ:-2.5, color:0xff5e8a, zone:'in',  floorY:0.03 },
   ],
@@ -472,6 +474,9 @@ CAM_TYPES.forEach(t => { if (!t.item) t.cosHalf = Math.cos(D2R(Math.min(t.fov, 1
 
 const EYE_HEIGHT   = 1.7;
 const MOVE_SPEED   = 4.5;
+const SPRINT_MULT  = 1.85;
+const JUMP_V       = 5.0;
+const GRAVITY      = 18;
 const PLAYER_RAD   = 0.3;
 const REACH        = 8;
 const MIN_MOUNT_Y  = 2.0;
@@ -585,19 +590,39 @@ addBox(nvrPos.x + 0.1, 0.82, nvrPos.z + 0.12, 0.42, 0.14, 0.35, matBodyA, {});
   }
 }
 
-// Engineer's van, parked west of the building
+// Engineer's van, parked outside the vehicle gate (Ford Transit style).
+// Length runs along x, cab at the +x end, nose pointing +x.
 {
   const v = LEVEL.van;
-  addBox(v.x - 0.8, 1.15, v.z, 3.0, 1.7, 1.9, MATS.van, { collide:1, occlude:1 });   // cargo
-  addBox(v.x + 1.5, 0.95, v.z, 1.6, 1.3, 1.9, MATS.van, { collide:1, occlude:1 });   // cab
-  const wg = new THREE.CylinderGeometry(0.3, 0.3, 0.24, 10); wg.rotateX(Math.PI/2);
-  for (const [wx, wz] of [[v.x-1.6, v.z-0.95],[v.x-1.6, v.z+0.95],[v.x+1.5, v.z-0.95],[v.x+1.5, v.z+0.95]]) {
-    const w = new THREE.Mesh(wg, matBodyB); w.position.set(wx, 0.3, wz); scene.add(w);
+  const W = 2.0;
+  const matVanGlass = new THREE.MeshLambertMaterial({ color:0x1b2a33 });
+  const matLight2 = new THREE.MeshLambertMaterial({ color:0xf2efd8 });
+  // tall panel body (cab + cargo)
+  addBox(v.x - 0.3, 1.45, v.z, 4.0, 1.9, W, MATS.van, { collide:1, occlude:1 });
+  // stepped-down bonnet at the front
+  addBox(v.x + 2.15, 0.95, v.z, 1.0, 0.8, W - 0.04, MATS.van, { collide:1, occlude:1 });
+  // raked windscreen
+  const wsF = new THREE.Mesh(boxGeo, matVanGlass);
+  wsF.scale.set(0.12, 1.0, W - 0.16); wsF.position.set(v.x + 1.7, 1.78, v.z); wsF.rotation.z = 0.32; scene.add(wsF);
+  // cab side windows (front only; panel van has none on the cargo box)
+  for (const sz of [-(W/2) + 0.01, (W/2) - 0.01]) {
+    const sw = new THREE.Mesh(boxGeo, matVanGlass);
+    sw.scale.set(0.7, 0.45, 0.04); sw.position.set(v.x + 1.25, 1.55, v.z + sz); scene.add(sw);
   }
-  const ws = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.7), matScreen);
-  ws.position.set(v.x + 2.31, 1.3, v.z); ws.rotation.y = Math.PI/2; scene.add(ws);
+  // rear door split line on the cargo back
+  const rl = new THREE.Mesh(boxGeo, matBodyB); rl.scale.set(0.04, 1.7, 0.05); rl.position.set(v.x - 2.29, 1.4, v.z); scene.add(rl);
+  // grille + headlamps
+  addBox(v.x + 2.66, 0.95, v.z, 0.06, 0.4, W - 0.5, matBodyB, {});
+  for (const lz of [-0.7, 0.7]) {
+    const h = new THREE.Mesh(boxGeo, matLight2); h.scale.set(0.08, 0.2, 0.32); h.position.set(v.x + 2.64, 1.2, v.z + lz); scene.add(h);
+  }
+  // wheels with arches
+  const wg = new THREE.CylinderGeometry(0.42, 0.42, 0.26, 12); wg.rotateX(Math.PI/2);
+  for (const [wx, wz] of [[v.x-1.3, v.z-1.0],[v.x-1.3, v.z+1.0],[v.x+1.6, v.z-1.0],[v.x+1.6, v.z+1.0]]) {
+    const w = new THREE.Mesh(wg, matBodyB); w.position.set(wx, 0.42, wz); scene.add(w);
+  }
 }
-const VAN_SEAT = { x: LEVEL.van.x + 1.6, y: 1.32, z: LEVEL.van.z + 0.45, yaw: -Math.PI/2 };
+const VAN_SEAT = { x: LEVEL.van.x + 1.6, y: 1.45, z: LEVEL.van.z, yaw: Math.PI };
 
 /* ---------------- perimeter fence + gates ---------------- */
 // Galvanised steel palisade. Posts and bars are decorative meshes; the two
@@ -605,7 +630,7 @@ const VAN_SEAT = { x: LEVEL.van.x + 1.6, y: 1.32, z: LEVEL.van.z + 0.45, yaw: -M
 // Not occluders: too thin to meaningfully block a camera sightline.
 const matFence = new THREE.MeshLambertMaterial({ color:0x8a9299 });
 {
-  const FX0 = -15, FX1 = 14.5, FZ0 = -10, FZ1 = 14;   // perimeter extents
+  const FX0 = -19, FX1 = 19, FZ0 = -17, FZ1 = 17;   // perimeter encloses all coverage dots
   const POST_H = 1.5, RAIL_Y = [0.5, 1.2];
   const postGeo = new THREE.CylinderGeometry(0.06, 0.06, POST_H, 8);
   const capGeo  = new THREE.ConeGeometry(0.08, 0.12, 8);
@@ -669,13 +694,9 @@ function makeCar(cx, cz, color) {
   addBox(cx,       0.72, cz, 3.5, 0.34, 1.68, body, { occlude:1 });              // upper body
   addBox(cx + 0.3, 1.05, cz, 2.1, 0.44, 1.52, body, { occlude:1 });             // cabin, set back
 
-  // glazing
-  const wsF = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.42), matGlass);
-  wsF.position.set(cx - 0.78, 1.02, cz); wsF.rotation.set(0, -Math.PI/2, 0); wsF.rotation.z = 0.5; scene.add(wsF);
-  for (const sz of [-0.77, 0.77]) {
-    const sw = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.34), matGlass);
-    sw.position.set(cx + 0.3, 1.06, cz + sz); sw.rotation.y = Math.PI/2; scene.add(sw);
-  }
+  // greenhouse: inset dark glass band with a body-colour roof on top
+  addBox(cx + 0.25, 1.02, cz, 2.0, 0.34, 1.5,  matGlass, { occlude:1 });   // glazing
+  addBox(cx + 0.35, 1.26, cz, 1.7, 0.16, 1.42, body,     { occlude:1 });   // roof
   // lamps
   for (const lz of [-0.6, 0.6]) {
     const h = new THREE.Mesh(boxGeo, matLight); h.scale.set(0.1, 0.16, 0.26); h.position.set(cx - 1.98, 0.55, cz + lz); scene.add(h);
@@ -687,12 +708,12 @@ function makeCar(cx, cz, color) {
       const w = new THREE.Mesh(carWheelGeo, matTyre); w.position.set(cx + wx, 0.34, cz + wz); scene.add(w);
     }
 }
-makeCar(-11.8, -0.5, 0x9aa4ad);
-makeCar(-11.8,  3.5, 0x6e4b3a);
+makeCar(-16, -0.5, 0x9aa4ad);
+makeCar(-16,  3.5, 0x6e4b3a);
 
 // bay line markings
 const matLine = new THREE.MeshLambertMaterial({ color:0xd9d6cc });
-for (const lz of [-2.6, 1.4, 5.4]) addBox(-11.8, -0.06, lz, 4.6, 0.04, 0.12, matLine, {});
+for (const lz of [-2.6, 1.4, 5.4]) addBox(-16, -0.06, lz, 4.6, 0.04, 0.12, matLine, {});
 
 /* ---------------- lamp posts ---------------- */
 // Decorative only; non-occluding. Bases collide so you can't walk through them.
@@ -711,15 +732,15 @@ function makeLamp(x, z, dx, dz) {
   arm.scale.set(0.08, 0.08, len); arm.position.set(x + dx*len/2, 4.3, z + dz*len/2); arm.rotation.y = ang; scene.add(arm);
   const hx = x + dx*len, hz = z + dz*len;
   const head = new THREE.Mesh(boxGeo, matLampHead);
-  head.scale.set(0.52, 0.18, 0.34); head.position.set(hx, 4.24, hz); head.rotation.y = ang; scene.add(head);
-  const glow = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.26), matLampGlow);
-  glow.rotation.x = Math.PI/2; glow.position.set(hx, 4.14, hz); scene.add(glow);
+  head.scale.set(0.5, 0.16, 0.34); head.position.set(hx, 4.22, hz); head.rotation.y = ang; scene.add(head);
+  const glow = new THREE.Mesh(boxGeo, matLampGlow);   // lit underside; box can't mis-orient
+  glow.scale.set(0.4, 0.04, 0.26); glow.position.set(hx, 4.13, hz); glow.rotation.y = ang; scene.add(glow);
 }
-makeLamp(-13.5, 12,  0.7, -0.7);
-makeLamp( 13.5, 12, -0.7, -0.7);
-makeLamp( 13.5, -8, -0.7,  0.7);
-makeLamp( -8,   -9,  0,    1);
-makeLamp(  0,   12,  0,   -1);
+makeLamp(-17.5, 15,  0.7, -0.7);
+makeLamp( 17.5, 15, -0.7, -0.7);
+makeLamp( 17.5, -15, -0.7, 0.7);
+makeLamp(-17.5, -15, 0.7,  0.7);
+makeLamp(  0,   16,  0,   -1);
 
 /* ---------------- trees ---------------- */
 // Soft perimeter scenery; non-occluding and non-colliding.
@@ -736,12 +757,12 @@ function makeTree(x, z, s) {
     const c = new THREE.Mesh(canopyGeo, mat); c.scale.setScalar(r*s); c.position.set(x + ox*s, oy*s, z + oz*s); scene.add(c);
   }
 }
-makeTree(-14.3, -8,  1.1);
-makeTree(-14.3,  7,  1.0);
-makeTree(-14.3, 11,  1.2);
-makeTree(-4,    -9,  1.0);
-makeTree( 4,    -9,  1.1);
-makeTree( 13,    8,  1.0);
+makeTree(-18, -10,  1.1);
+makeTree(-18,   8,  1.0);
+makeTree(-18,  14,  1.2);
+makeTree(-6,  -15,  1.0);
+makeTree( 6,  -15,  1.1);
+makeTree( 18,   9,  1.0);
 
 /* ---------------- interior furniture ---------------- */
 // Warehouse fit-out. Non-occluding so interior coverage is unaffected; the
@@ -783,7 +804,7 @@ function makeBench(cx, cz, w) {
     }
   const vice = new THREE.Mesh(boxGeo, matFrame); vice.scale.set(0.18, 0.16, 0.14); vice.position.set(cx - w/2 + 0.25, 0.9, cz); scene.add(vice);
 }
-makeBench(-3, 5.4, 2.2);
+makeBench(-6, 4.6, 2.2);   // west side, clear of the south entrance
 
 // pallet stacks with shrink-wrapped loads
 function makePallets(cx, cz, layers) {
@@ -823,7 +844,7 @@ makeBollard(-1.6, 6.9);
 
 /* ---------------- player / global state ---------------- */
 
-const player = { x:LEVEL.spawn.x, z:LEVEL.spawn.z, yaw:LEVEL.spawn.yaw, pitch:0 };
+const player = { x:LEVEL.spawn.x, z:LEVEL.spawn.z, yaw:LEVEL.spawn.yaw, pitch:0, y:0, vy:0, onGround:true };
 const keys = {};
 let locked = false;
 let mode = 'fp';          // 'fp' | 'feed'
@@ -864,15 +885,22 @@ function movePlayer(dt) {
   if (keys['KeyD']) fx += 1;
   if (!fx && !fz) return;
   const len = Math.hypot(fx, fz); fx /= len; fz /= len;
+  const speed = MOVE_SPEED * ((keys['ShiftLeft'] || keys['ShiftRight']) ? SPRINT_MULT : 1);
   const sin = Math.sin(player.yaw), cos = Math.cos(player.yaw);
-  const dx = (fz * -sin + fx *  cos) * MOVE_SPEED * dt;
-  const dz = (fz * -cos + fx * -sin) * MOVE_SPEED * dt;
+  const dx = (fz * -sin + fx *  cos) * speed * dt;
+  const dz = (fz * -cos + fx * -sin) * speed * dt;
   let nx = player.x + dx;
   if (!blockedAt(nx, player.z)) player.x = nx;
   let nz = player.z + dz;
   if (!blockedAt(player.x, nz)) player.z = nz;
   player.x = clamp(player.x, LEVEL.bounds.minX, LEVEL.bounds.maxX);
   player.z = clamp(player.z, LEVEL.bounds.minZ, LEVEL.bounds.maxZ);
+}
+
+function updateVertical(dt) {
+  player.vy -= GRAVITY * dt;
+  player.y += player.vy * dt;
+  if (player.y <= 0) { player.y = 0; player.vy = 0; player.onGround = true; }
 }
 
 /* ---------------- pointer lock ---------------- */
@@ -1633,8 +1661,8 @@ const interactables = [
     lookPos:() => ({ x:LEVEL.router.x, y:LEVEL.router.y, z:LEVEL.router.z }) },
   { label:'ARC PORTAL',  x:0, z:0, r:1.9, avail:() => !!laptopGroup, act:() => openUI('portal'), laptop:true,
     lookPos:() => laptopGroup ? { x:laptopGroup.position.x, y:0.12, z:laptopGroup.position.z } : null },
-  { label:'SIT IN VAN',  x:LEVEL.van.x + 1.6, z:LEVEL.van.z + 1.5, r:1.9, avail:() => true, act:enterVan },
-  { label:'SMOKE BREAK', x:LEVEL.van.x - 2.4, z:LEVEL.van.z + 1.5, r:1.9, avail:() => tNow > smokeCDUntil && tNow > smokeUntil, act:startSmoke },
+  { label:'SIT IN VAN',  x:LEVEL.van.x, z:LEVEL.van.z - 2.0, r:2.1, avail:() => true, act:enterVan },
+  { label:'SMOKE BREAK', x:LEVEL.van.x - 3.5, z:LEVEL.van.z,       r:1.9, avail:() => tNow > smokeCDUntil && tNow > smokeUntil, act:startSmoke },
 ];
 
 function lookingAt(pos, maxDist) {
@@ -1932,6 +1960,7 @@ document.addEventListener('keydown', e => {
   else if (e.code === 'KeyR') { if (roofMesh) roofMesh.visible = !roofMesh.visible; }
   else if (e.code === 'KeyQ') { const it = nearestInteractable(); if (it) it.act(); }
   else if (e.code === 'KeyC') { if (phoneReady()) startCall(); }
+  else if (e.code === 'Space') { if (player.onGround && tNow >= smokeUntil) { player.vy = JUMP_V; player.onGround = false; } }
 });
 document.addEventListener('keyup', e => { keys[e.code] = false; });
 
@@ -2060,7 +2089,8 @@ function animate() {
       lookLabel.style.display = 'none';
     } else {
       if (locked && !smoking && !uiOpen) movePlayer(dt);
-      camera.position.set(player.x, EYE_HEIGHT, player.z);
+      updateVertical(dt);
+      camera.position.set(player.x, EYE_HEIGHT + player.y, player.z);
       camera.rotation.y = player.yaw;
       camera.rotation.x = player.pitch;
 
