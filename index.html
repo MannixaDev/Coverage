@@ -743,6 +743,59 @@ makeTree(-4,    -9,  1.0);
 makeTree( 4,    -9,  1.1);
 makeTree( 13,    8,  1.0);
 
+/* ---------------- interior furniture ---------------- */
+// Warehouse fit-out. Non-occluding so interior coverage is unaffected; the
+// bottom shelf / bench top / pallet base collide so you walk around them.
+const matFrame  = new THREE.MeshLambertMaterial({ color:0x55585c });
+const matBoard  = new THREE.MeshLambertMaterial({ color:0x8a7355 });
+const matCarton = new THREE.MeshLambertMaterial({ color:0xb89968 });
+const matWrap   = new THREE.MeshLambertMaterial({ color:0x6d7e8c });
+
+// shelving unit, length along z, set against a wall (depth along x)
+function makeShelf(cx, cz, lenZ, depth) {
+  for (const ez of [-lenZ/2 + 0.05, lenZ/2 - 0.05])
+    for (const ex of [-depth/2 + 0.04, depth/2 - 0.04]) {
+      const u = new THREE.Mesh(boxGeo, matFrame); u.scale.set(0.06, 2.0, 0.06); u.position.set(cx + ex, 1.0, cz + ez); scene.add(u);
+    }
+  addBox(cx, 0.06, cz, depth, 0.06, lenZ, matBoard, { collide:1 });   // base (footprint collider)
+  for (const sy of [0.75, 1.45]) {
+    const s = new THREE.Mesh(boxGeo, matBoard); s.scale.set(depth, 0.05, lenZ); s.position.set(cx, sy, cz); scene.add(s);
+  }
+  // a few cartons on the shelves
+  for (let i = 0; i < 4; i++) {
+    const b = new THREE.Mesh(boxGeo, Math.random() < 0.5 ? matCarton : matWrap);
+    const bw = 0.3 + Math.random()*0.2;
+    b.scale.set(depth*0.7, bw, bw);
+    b.position.set(cx, (Math.random()<0.5?0.75:1.45) + bw/2 + 0.03, cz + (Math.random()-0.5)*(lenZ-0.6));
+    scene.add(b);
+  }
+}
+makeShelf(-8.45, 3.3, 3.2, 0.5);
+makeShelf(-8.45, 0.0, 2.0, 0.5);
+makeShelf( 8.45, 3.0, 3.2, 0.5);
+
+// workbench
+function makeBench(cx, cz, w) {
+  addBox(cx, 0.78, cz, w, 0.08, 0.7, matBoard, { collide:1 });   // top
+  for (const ex of [-w/2 + 0.1, w/2 - 0.1])
+    for (const ez of [-0.28, 0.28]) {
+      const l = new THREE.Mesh(boxGeo, matFrame); l.scale.set(0.07, 0.74, 0.07); l.position.set(cx + ex, 0.37, cz + ez); scene.add(l);
+    }
+  const vice = new THREE.Mesh(boxGeo, matFrame); vice.scale.set(0.18, 0.16, 0.14); vice.position.set(cx - w/2 + 0.25, 0.9, cz); scene.add(vice);
+}
+makeBench(-3, 5.4, 2.2);
+
+// pallet stacks with shrink-wrapped loads
+function makePallets(cx, cz, layers) {
+  for (let i = 0; i < layers; i++) {
+    const y0 = i * 0.52;
+    addBox(cx, y0 + 0.07, cz, 1.1, 0.12, 1.1, matBoard, i === 0 ? { collide:1 } : {});   // pallet
+    const ld = new THREE.Mesh(boxGeo, matWrap); ld.scale.set(0.95, 0.34, 0.95); ld.position.set(cx, y0 + 0.31, cz); scene.add(ld);
+  }
+}
+makePallets(7.4, -1.2, 2);
+makePallets(3.4, 4.8, 3);
+
 /* ---------------- player / global state ---------------- */
 
 const player = { x:LEVEL.spawn.x, z:LEVEL.spawn.z, yaw:LEVEL.spawn.yaw, pitch:0 };
