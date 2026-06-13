@@ -796,6 +796,31 @@ function makePallets(cx, cz, layers) {
 makePallets(7.4, -1.2, 2);
 makePallets(3.4, 4.8, 3);
 
+/* ---------------- exterior extras ---------------- */
+// Refuse skip south of the refuse zone (its shadow falls away from the zone),
+// and bollards flanking the building entrance.
+const matSkip = new THREE.MeshLambertMaterial({ color:0xc28a36 });
+function makeSkip(cx, cz) {
+  addBox(cx, 0.12, cz, 2.4, 0.12, 1.5, matSkip, { collide:1, occlude:1 });          // floor
+  for (const ez of [-0.71, 0.71]) addBox(cx, 0.62, cz + ez, 2.4, 1.0, 0.08, matSkip, { occlude:1 });   // long sides
+  for (const ex of [-1.16, 1.16]) addBox(cx + ex, 0.62, cz, 0.08, 1.0, 1.5, matSkip, { occlude:1 });   // ends
+  // overflowing waste
+  const w1 = new THREE.Mesh(boxGeo, matBoard); w1.scale.set(1.2, 0.5, 0.3); w1.position.set(cx - 0.3, 1.1, cz + 0.2); w1.rotation.z = 0.3; scene.add(w1);
+  const w2 = new THREE.Mesh(boxGeo, matWrap);  w2.scale.set(0.5, 0.5, 0.6); w2.position.set(cx + 0.6, 1.05, cz - 0.2); scene.add(w2);
+}
+makeSkip(11, -4.2);
+
+// entrance bollards
+const matBollard = new THREE.MeshLambertMaterial({ color:0xd6b330 });
+const bollardGeo = new THREE.CylinderGeometry(0.1, 0.11, 0.9, 10);
+function makeBollard(x, z) {
+  addBox(x, 0.04, z, 0.26, 0.08, 0.26, matFrame, { collide:1 });   // base plate + footprint
+  const b = new THREE.Mesh(bollardGeo, matBollard); b.position.set(x, 0.49, z); scene.add(b);
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 6), matBollard); cap.position.set(x, 0.94, z); scene.add(cap);
+}
+makeBollard(-4.4, 6.9);
+makeBollard(-1.6, 6.9);
+
 /* ---------------- player / global state ---------------- */
 
 const player = { x:LEVEL.spawn.x, z:LEVEL.spawn.z, yaw:LEVEL.spawn.yaw, pitch:0 };
