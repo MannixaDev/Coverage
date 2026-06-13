@@ -914,13 +914,17 @@ function makeShelf(cx, cz, lenZ, depth) {
   for (const sy of [0.75, 1.45]) {
     const s = new THREE.Mesh(boxGeo, matBoard); s.scale.set(depth, 0.05, lenZ); s.position.set(cx, sy, cz); scene.add(s);
   }
-  // a few cartons on the shelves
-  for (let i = 0; i < 4; i++) {
-    const b = new THREE.Mesh(boxGeo, Math.random() < 0.5 ? matCarton : matWrap);
-    const bw = 0.3 + Math.random()*0.2;
-    b.scale.set(depth*0.7, bw, bw);
-    b.position.set(cx, (Math.random()<0.5?0.75:1.45) + bw/2 + 0.03, cz + (Math.random()-0.5)*(lenZ-0.6));
-    scene.add(b);
+  // cartons in evenly spaced slots so they never overlap
+  for (const sy of [0.75, 1.45]) {
+    const n = Math.max(1, Math.floor(lenZ / 0.9));
+    const slot = lenZ / n;
+    for (let i = 0; i < n; i++) {
+      const bw = 0.34;
+      const b = new THREE.Mesh(boxGeo, (i % 2) ? matWrap : matCarton);
+      b.scale.set(depth*0.7, bw, slot*0.7);
+      b.position.set(cx, sy + bw/2 + 0.03, cz - lenZ/2 + (i + 0.5)*slot);
+      scene.add(b);
+    }
   }
 }
 makeShelf(-8.45, 3.3, 3.2, 0.5);
