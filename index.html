@@ -694,6 +694,55 @@ makeCar(-11.8,  3.5, 0x6e4b3a);
 const matLine = new THREE.MeshLambertMaterial({ color:0xd9d6cc });
 for (const lz of [-2.6, 1.4, 5.4]) addBox(-11.8, -0.06, lz, 4.6, 0.04, 0.12, matLine, {});
 
+/* ---------------- lamp posts ---------------- */
+// Decorative only; non-occluding. Bases collide so you can't walk through them.
+const matLampPole = new THREE.MeshLambertMaterial({ color:0x3d4349 });
+const matLampHead = new THREE.MeshLambertMaterial({ color:0x2a2e31 });
+const matLampGlow = new THREE.MeshBasicMaterial({ color:0xfdf0c0 });
+const lampShaftGeo = new THREE.CylinderGeometry(0.07, 0.1, 4.2, 10);
+
+function makeLamp(x, z, dx, dz) {
+  const ang = Math.atan2(dx, dz);
+  addBox(x, 0.16, z, 0.42, 0.32, 0.42, matLampPole, { collide:1 });   // base
+  const shaft = new THREE.Mesh(lampShaftGeo, matLampPole);
+  shaft.position.set(x, 2.3, z); scene.add(shaft);
+  const len = 1.1;
+  const arm = new THREE.Mesh(boxGeo, matLampPole);
+  arm.scale.set(0.08, 0.08, len); arm.position.set(x + dx*len/2, 4.3, z + dz*len/2); arm.rotation.y = ang; scene.add(arm);
+  const hx = x + dx*len, hz = z + dz*len;
+  const head = new THREE.Mesh(boxGeo, matLampHead);
+  head.scale.set(0.52, 0.18, 0.34); head.position.set(hx, 4.24, hz); head.rotation.y = ang; scene.add(head);
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.26), matLampGlow);
+  glow.rotation.x = Math.PI/2; glow.position.set(hx, 4.14, hz); scene.add(glow);
+}
+makeLamp(-13.5, 12,  0.7, -0.7);
+makeLamp( 13.5, 12, -0.7, -0.7);
+makeLamp( 13.5, -8, -0.7,  0.7);
+makeLamp( -8,   -9,  0,    1);
+makeLamp(  0,   12,  0,   -1);
+
+/* ---------------- trees ---------------- */
+// Soft perimeter scenery; non-occluding and non-colliding.
+const matTrunk = new THREE.MeshLambertMaterial({ color:0x5a4632 });
+const matLeafA = new THREE.MeshLambertMaterial({ color:0x4a7340 });
+const matLeafB = new THREE.MeshLambertMaterial({ color:0x3e6336 });
+const trunkGeo  = new THREE.CylinderGeometry(0.13, 0.19, 1.6, 8);
+const canopyGeo = new THREE.SphereGeometry(1, 10, 8);
+
+function makeTree(x, z, s) {
+  const tr = new THREE.Mesh(trunkGeo, matTrunk); tr.scale.set(s, s, s); tr.position.set(x, 0.8*s, z); scene.add(tr);
+  const lobes = [[matLeafA, 0.95, 0, 1.8, 0], [matLeafB, 0.72, 0.45, 2.3, -0.25], [matLeafA, 0.62, -0.35, 2.4, 0.35]];
+  for (const [mat, r, ox, oy, oz] of lobes) {
+    const c = new THREE.Mesh(canopyGeo, mat); c.scale.setScalar(r*s); c.position.set(x + ox*s, oy*s, z + oz*s); scene.add(c);
+  }
+}
+makeTree(-14.3, -8,  1.1);
+makeTree(-14.3,  7,  1.0);
+makeTree(-14.3, 11,  1.2);
+makeTree(-4,    -9,  1.0);
+makeTree( 4,    -9,  1.1);
+makeTree( 13,    8,  1.0);
+
 /* ---------------- player / global state ---------------- */
 
 const player = { x:LEVEL.spawn.x, z:LEVEL.spawn.z, yaw:LEVEL.spawn.yaw, pitch:0 };
