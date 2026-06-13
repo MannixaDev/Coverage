@@ -245,6 +245,25 @@
   #winStats span{color:var(--osd-dim)}
   #winPanel .wgo{font-size:10.5px;letter-spacing:.18em;color:var(--osd-dim)}
 
+  /* dev menu */
+  #devMenu{
+    position:fixed;top:50px;right:14px;z-index:11;
+    background:#04070a;border:1px solid #ff3b30;border-radius:4px;
+    padding:10px 14px;font-size:11px;letter-spacing:.1em;color:var(--osd);
+    display:none;min-width:210px;
+  }
+  #devMenu .dh{color:#ff3b30;font-size:9px;letter-spacing:.22em;margin-bottom:8px;border-bottom:1px solid rgba(255,59,48,.3);padding-bottom:5px}
+  #devMenu .dbtn{
+    display:block;width:100%;background:#0f0303;color:var(--osd);
+    border:1px solid rgba(255,59,48,.35);border-radius:2px;
+    font-family:inherit;font-size:10.5px;letter-spacing:.1em;
+    padding:6px 10px;margin:3px 0;cursor:pointer;text-align:left;
+  }
+  #devMenu .dbtn:hover{background:#1e0808;border-color:#ff3b30}
+  #devMenu .dsep{height:1px;background:rgba(255,59,48,.2);margin:6px 0}
+  #devMenu .dstat{font-size:9.5px;color:var(--osd-dim);margin-top:6px;line-height:1.7}
+  #devMenu .dstat .ok{color:var(--ok)} #devMenu .dstat .warn{color:var(--warn)} #devMenu .dstat .bad{color:var(--bad)}
+
   /* start / pause overlay */
   #overlay{
     position:fixed;inset:0;z-index:10;
@@ -319,6 +338,8 @@
 <div id="routerUI" class="uiPanel"><div class="win"><div class="rbody" id="routerBody"></div></div></div>
 
 <div id="nvrUI" class="uiPanel"><div class="win"><div class="nbody" id="nvrBody"></div></div></div>
+
+<div id="devMenu"><div class="dh">DEV MENU &middot; ` TO CLOSE</div></div>
 
 <div id="winPanel">
   <div class="panel">
@@ -585,6 +606,7 @@ let vanMode = false;
 let tNow = 0;
 
 // commissioning state
+const portalFormState = { site: LEVEL.name, ip: '', port: '' };
 const wanIP = [86, 81, 82, 90, 109][Math.floor(Math.random()*5)] + '.' +
   (1+Math.floor(Math.random()*254)) + '.' + (1+Math.floor(Math.random()*254)) + '.' + (1+Math.floor(Math.random()*254));
 const ARC_PORT = '8000';
@@ -742,6 +764,7 @@ let aimPanC = 0,  aimTiltC = 0;
 
 function rebuildGhost() {
   while (ghostRoot.children.length) ghostRoot.remove(ghostRoot.children[0]);
+  if (selected === -1) { ghostRoot.visible = false; return; }
   const type = CAM_TYPES[selected];
   if (type.item) {
     ghostBody = makeLaptop(ghostMat);
@@ -773,6 +796,7 @@ const rdeg = r => Math.round(R2D(r));
 function setAim(txt, ok) { aimMsg.textContent = txt; aimMsg.className = ok ? 'ok' : 'bad'; }
 
 function updateGhost() {
+  if (selected === -1) { ghostRoot.visible = false; aimMsg.textContent = ''; return; }
   const type = CAM_TYPES[selected];
   rayAim.setFromCamera({ x:0, y:0 }, camera);
   const hit = rayAim.intersectObjects(placeSurfaces, false)[0];
@@ -880,7 +904,7 @@ function markDirty() {
 }
 
 function placeCurrent() {
-  if (!ghostValid) return;
+  if (selected === -1 || !ghostValid) return;
   const type = CAM_TYPES[selected];
 
   if (type.item) {   // laptop
@@ -1198,9 +1222,9 @@ function renderPortalForm(body, amending) {
   body.innerHTML =
     (configDirty ? '<p style="color:#b3261e"><b>SITE CONFIGURATION CHANGED.</b> Resubmit the schedule.</p>' : '') +
     '<p>New connection &middot; signalling schedule</p>' +
-    '<label>SITE NAME</label><input id="pSite" value="' + esc(LEVEL.name) + '">' +
-    '<label>EXTERNAL IP ADDRESS</label><input id="pIp" placeholder="0.0.0.0">' +
-    '<label>OPEN PORT</label><input id="pPort" placeholder="port number" style="max-width:120px">' +
+    '<label>SITE NAME</label><input id="pSite" value="' + esc(portalFormState.site) + '">' +
+    '<label>EXTERNAL IP ADDRESS</label><input id="pIp" placeholder="0.0.0.0" value="' + esc(portalFormState.ip) + '">' +
+    '<label>OPEN PORT</label><input id="pPort" placeholder="port number" style="max-width:120px" value="' + esc(portalFormState.port) + '">' +
     '<table><tr><th>#</th><th>CAMERA NAME</th><th>TYPE</th><th>ALARM ACTION</th></tr>' + rows + '</table>' +
     '<div class="errs" id="pErrs"></div>' +
     '<div style="margin-top:12px">' +
@@ -1208,6 +1232,13 @@ function renderPortalForm(body, amending) {
     '<button class="uiBtn plain" id="pClose">CLOSE</button></div>';
   document.getElementById('pClose').onclick = closeUI;
   document.getElementById('pSubmit').onclick = submitPortal;
+  document.getElementById('pSite').addEventListener('input', e => { portalFormState.site = e.target.value; });
+  document.getElementById('pIp').addEventListener('input', e => { portalFormState.ip = e.target.value; });
+  document.getElementById('pPort').addEventListener('input', e => { portalFormState.port = e.target.value; });
+  placed.forEach((c, i) => {
+    document.getElementById('pName' + i).addEventListener('input', e => { c.name = e.target.value; });
+    document.getElementById('pAlarm' + i).addEventListener('change', e => { c.alarm = e.target.value || null; });
+  });
 }
 
 function submitPortal() {
@@ -1370,12 +1401,25 @@ function updateFeedCam() {
 
 const intPrompt = document.getElementById('intPrompt');
 const interactables = [
-  { label:'NVR',          x:nvrPos.x, z:nvrPos.z + 1.0, r:2.0, avail:() => true, act:() => openUI('nvr') },
-  { label:'ROUTER',       x:LEVEL.router.x, z:LEVEL.router.z + 0.55, r:1.8, avail:() => true, act:() => openUI('router') },
-  { label:'ARC PORTAL',   x:0, z:0, r:1.9, avail:() => !!laptopGroup, act:() => openUI('portal'), laptop:true },
-  { label:'SIT IN VAN',   x:LEVEL.van.x + 1.6, z:LEVEL.van.z + 1.5, r:1.9, avail:() => true, act:enterVan },
-  { label:'SMOKE BREAK',  x:LEVEL.van.x - 2.4, z:LEVEL.van.z + 1.5, r:1.9, avail:() => tNow > smokeCDUntil && tNow > smokeUntil, act:startSmoke },
+  { label:'NVR',         x:nvrPos.x, z:nvrPos.z + 1.0, r:2.0, avail:() => true, act:() => openUI('nvr'),
+    lookPos:() => ({ x:nvrPos.x, y:0.9, z:nvrPos.z }) },
+  { label:'ROUTER',      x:LEVEL.router.x, z:LEVEL.router.z + 0.55, r:1.8, avail:() => true, act:() => openUI('router'),
+    lookPos:() => ({ x:LEVEL.router.x, y:LEVEL.router.y, z:LEVEL.router.z }) },
+  { label:'ARC PORTAL',  x:0, z:0, r:1.9, avail:() => !!laptopGroup, act:() => openUI('portal'), laptop:true,
+    lookPos:() => laptopGroup ? { x:laptopGroup.position.x, y:0.12, z:laptopGroup.position.z } : null },
+  { label:'SIT IN VAN',  x:LEVEL.van.x + 1.6, z:LEVEL.van.z + 1.5, r:1.9, avail:() => true, act:enterVan },
+  { label:'SMOKE BREAK', x:LEVEL.van.x - 2.4, z:LEVEL.van.z + 1.5, r:1.9, avail:() => tNow > smokeCDUntil && tNow > smokeUntil, act:startSmoke },
 ];
+
+function lookingAt(pos, maxDist) {
+  if (!pos) return false;
+  const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
+  const dx = pos.x - cx, dy = pos.y - cy, dz = pos.z - cz;
+  const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+  if (dist > maxDist) return false;
+  camera.getWorldDirection(_fwd);
+  return (dx * _fwd.x + dy * _fwd.y + dz * _fwd.z) / dist > 0.82;
+}
 
 function nearestInteractable() {
   let best = null, bestD = 1e9;
@@ -1384,7 +1428,10 @@ function nearestInteractable() {
     const ix = it.laptop ? laptopGroup.position.x : it.x;
     const iz = it.laptop ? laptopGroup.position.z : it.z;
     const d = Math.hypot(player.x - ix, player.z - iz);
-    if (d < it.r && d < bestD) { best = it; bestD = d; }
+    if (d < it.r && d < bestD) {
+      if (it.lookPos && !lookingAt(it.lookPos(), it.r + 2)) continue;
+      best = it; bestD = d;
+    }
   }
   return best;
 }
@@ -1597,11 +1644,18 @@ function updateLookLabel() {
 /* ---------------- hotbar UI ---------------- */
 
 const hotbar = document.getElementById('hotbar');
+{
+  const el = document.createElement('div');
+  el.className = 'slot';
+  el.innerHTML = '<div class="num">1</div><div class="nm">EMPTY</div><div class="meta">NOTHING IN HAND</div><div class="cost">&nbsp;</div>';
+  el.addEventListener('click', () => selectSlot(-1));
+  hotbar.appendChild(el);
+}
 CAM_TYPES.forEach((t, i) => {
   const el = document.createElement('div');
   el.className = 'slot';
   el.innerHTML =
-    '<div class="num">' + (i + 1) + '</div>' +
+    '<div class="num">' + (i + 2) + '</div>' +
     '<div class="nm">' + t.name + '</div>' +
     '<div class="meta">' + (t.item ? 'FLAT SURFACE \u00B7 ARC PORTAL' :
       t.mount.map(m => m === 'ceiling' ? 'CEIL' : 'WALL').join('/') +
@@ -1613,7 +1667,8 @@ CAM_TYPES.forEach((t, i) => {
 
 function selectSlot(i) {
   selected = i;
-  [...hotbar.children].forEach((el, j) => el.classList.toggle('sel', j === selected));
+  // children: [EMPTY(j=0), BULLET(j=1, sel=0), ...] so sel index = selected + 1
+  [...hotbar.children].forEach((el, j) => el.classList.toggle('sel', j === selected + 1));
   rebuildGhost();
 }
 
@@ -1622,6 +1677,7 @@ function selectSlot(i) {
 document.addEventListener('keydown', e => {
   keys[e.code] = true;
 
+  if (e.code === 'Backquote') { toggleDev(); return; }
   if (uiOpen) { if (e.code === 'Escape') closeUI(); return; }
   if (!locked) return;
   if (winOpen && e.code === 'Enter') { closeWin(); return; }
@@ -1640,8 +1696,9 @@ document.addEventListener('keydown', e => {
   }
 
   if (e.code.startsWith('Digit')) {
-    const n = +e.code.slice(5) - 1;
-    if (n >= 0 && n < CAM_TYPES.length) selectSlot(n);
+    const n = +e.code.slice(5);
+    if (n === 1) selectSlot(-1);
+    else if (n >= 2 && n <= CAM_TYPES.length + 1) selectSlot(n - 2);
   }
   else if (e.code === 'KeyE') removeLooked();
   else if (e.code === 'KeyF') { fovVisible = !fovVisible; placed.forEach(c => c.cone.visible = fovVisible); }
@@ -1669,6 +1726,87 @@ document.getElementById('overlayBrief').innerHTML =
   'laptop, lodge the signalling schedule on the ARC portal (the router has the connection details), ' +
   'then enter the SMTP settings on the NVR and wait out provisioning. <b>Walk test:</b> phone the ' +
   'ARC and activate each signalling camera on request.';
+
+/* ---------------- dev menu ---------------- */
+
+const devMenuEl = document.getElementById('devMenu');
+let devOpen = false;
+
+function toggleDev() {
+  devOpen = !devOpen;
+  devMenuEl.style.display = devOpen ? 'block' : 'none';
+  if (devOpen) renderDevMenu();
+}
+
+function renderDevMenu() {
+  const stat =
+    '<div class="dstat">' +
+    'survey: <span class="' + (surveyPass ? 'ok' : 'bad') + '">' + (surveyPass ? 'PASS' : 'FAIL') + '</span>' +
+    ' &middot; cams: ' + placed.length +
+    '<br>schedule: <span class="' + (scheduleSubmitted && !configDirty ? 'ok' : configDirty ? 'warn' : 'bad') + '">' +
+    (configDirty ? 'DIRTY' : scheduleSubmitted ? 'SUBMITTED' : 'NOT SUBMITTED') + '</span>' +
+    '<br>provision: <span class="' + (provisionRemaining <= 0 ? 'ok' : 'warn') + '">' +
+    (provisionRemaining > 0 ? fmtMSS(provisionRemaining) + ' left' : 'DONE') + '</span>' +
+    '<br>NVR: <span class="' + (nvrConnected ? 'ok' : 'bad') + '">' + (nvrConnected ? 'CONNECTED' : 'NOT CONNECTED') + '</span>' +
+    '</div>';
+  devMenuEl.innerHTML =
+    '<div class="dh">DEV MENU &middot; ` TO CLOSE</div>' +
+    '<button class="dbtn" id="dFillPortal">AUTOFILL + OPEN PORTAL</button>' +
+    '<button class="dbtn" id="dFillNVR">AUTOFILL NVR SMTP</button>' +
+    '<button class="dbtn" id="dSkipProv">SKIP PROVISIONING</button>' +
+    '<div class="dsep"></div>' +
+    '<button class="dbtn" id="dFullComm">COMPLETE COMMISSION</button>' +
+    '<div class="dsep"></div>' +
+    '<button class="dbtn" id="dReload">RELOAD PAGE</button>' +
+    stat;
+  document.getElementById('dFillPortal').onclick = devFillPortal;
+  document.getElementById('dFillNVR').onclick = devFillNVR;
+  document.getElementById('dSkipProv').onclick = () => { provisionRemaining = 0; updateStageChip(); renderDevMenu(); };
+  document.getElementById('dFullComm').onclick = devCompleteCommission;
+  document.getElementById('dReload').onclick = () => location.reload();
+}
+
+function devFillPortal() {
+  portalFormState.ip = wanIP;
+  portalFormState.port = ARC_PORT;
+  placed.forEach(c => {
+    if (!c.alarm) {
+      c.alarm = c.type.id === 'anpr' ? 'view' : c.type.id === 'thermal' ? 'thermal' : 'intrusion';
+    }
+  });
+  devOpen = false; devMenuEl.style.display = 'none';
+  openUI('portal');
+}
+
+function devFillNVR() {
+  if (!smtpPack) { renderDevMenu(); return; }
+  devOpen = false; devMenuEl.style.display = 'none';
+  openUI('nvr');
+  setTimeout(() => {
+    const s = document.getElementById('nSrv'), p = document.getElementById('nPort'), m = document.getElementById('nMail');
+    if (s) s.value = smtpPack.server;
+    if (p) p.value = smtpPack.port;
+    if (m) m.value = smtpPack.email;
+  }, 0);
+}
+
+function devCompleteCommission() {
+  placed.forEach(c => {
+    if (!c.alarm) {
+      c.alarm = c.type.id === 'anpr' ? 'view' : c.type.id === 'thermal' ? 'thermal' : 'intrusion';
+    }
+  });
+  scheduleSubmitted = true; configDirty = false;
+  if (!packIssued) {
+    packIssued = true;
+    smtpPack = { server:'smtp.arc-monitoring.net', port:'587',
+      email:'unit1-' + Math.floor(1000 + Math.random()*9000) + '@alarms.arc-monitoring.net' };
+  }
+  provisionRemaining = 0;
+  nvrConnected = true;
+  updateStageChip();
+  renderDevMenu();
+}
 
 /* ---------------- main loop ---------------- */
 
@@ -1723,7 +1861,7 @@ function animate() {
   }
 }
 
-selectSlot(0);
+selectSlot(-1);
 recompute();
 animate();
 </script>
