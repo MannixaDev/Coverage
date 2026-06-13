@@ -578,6 +578,8 @@ const MATS = {
   post:   new THREE.MeshLambertMaterial({ color:0x5a6168 }),
   desk:   new THREE.MeshLambertMaterial({ color:0x6f5b44 }),
   van:    new THREE.MeshLambertMaterial({ color:0x3e5a78 }),
+  road:     new THREE.MeshLambertMaterial({ color:0x3b3e42 }),
+  concrete: new THREE.MeshLambertMaterial({ color:0x9a988f }),
 };
 const matBodyA  = new THREE.MeshLambertMaterial({ color:0xe9eaec });
 const matBodyB  = new THREE.MeshLambertMaterial({ color:0x23262a });
@@ -612,6 +614,22 @@ for (const b of LEVEL.boxes) {
   const m = addBox(b.x, b.y, b.z, b.sx, b.sy, b.sz, MATS[b.m], { collide:b.c, occlude:b.o, place:b.p });
   if (b.roof) roofMesh = m;
 }
+
+/* ---------------- hardstanding + roads ---------------- */
+// Thin flat slabs laid just above the grass. Concrete apron under the building,
+// tarmac for the public street, the gate drive, the cross road and car park.
+const matRoadLine = new THREE.MeshLambertMaterial({ color:0xd9d6cc });
+function addFlat(cx, cz, sx, sz, mat, y) { addBox(cx, y, cz, sx, 0.03, sz, mat, {}); }
+
+addFlat(0, 0.5, 22, 17, MATS.concrete, -0.055);    // concrete apron around the building
+addFlat(0, 20, 44, 4, MATS.road, -0.05);           // public street outside the gate
+addFlat(5, 12.75, 3.4, 11.5, MATS.road, -0.05);    // entry drive through the gate
+addFlat(-5.4, 10, 24.2, 4, MATS.road, -0.05);      // cross road to the car park
+addFlat(-16, 4, 5, 14, MATS.road, -0.05);          // car park pad
+
+// dashed centre line on the street + a give-way line at the gate
+for (let x = -20; x <= 20; x += 4) addBox(x, -0.03, 20, 1.6, 0.02, 0.18, matRoadLine, {});
+addBox(5, -0.03, 17.7, 3.0, 0.02, 0.3, matRoadLine, {});
 
 // NVR desk + monitor + recorder
 const nvrPos = LEVEL.nvr;
@@ -761,9 +779,9 @@ function makeCar(cx, cz, color) {
 makeCar(-16, -0.5, 0x9aa4ad);
 makeCar(-16,  3.5, 0x6e4b3a);
 
-// bay line markings
+// bay line markings (sit on top of the car park tarmac)
 const matLine = new THREE.MeshLambertMaterial({ color:0xd9d6cc });
-for (const lz of [-2.6, 1.4, 5.4]) addBox(-16, -0.06, lz, 4.6, 0.04, 0.12, matLine, {});
+for (const lz of [-2.6, 1.4, 5.4]) addBox(-16, -0.03, lz, 4.6, 0.02, 0.12, matLine, {});
 
 /* ---------------- lamp posts ---------------- */
 // Decorative only; non-occluding. Bases collide so you can't walk through them.
