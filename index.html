@@ -238,6 +238,11 @@
   #nvrUI .uiBtn{background:#22303a;color:var(--osd);border:1px solid rgba(255,255,255,.2)}
   #nvrUI .stat{margin:6px 0 10px}
   #nvrUI .ok{color:var(--ok)} #nvrUI .warn{color:var(--warn)} #nvrUI .bad{color:var(--bad)}
+  #nvrUI .armRow{display:flex;align-items:center;gap:12px;margin:4px 0 12px;font-size:11px;letter-spacing:.14em}
+  #nvrUI .armSlider{width:54px;height:24px;border-radius:12px;background:#2f3a34;border:1px solid rgba(255,255,255,.22);position:relative;cursor:pointer}
+  #nvrUI .armSlider.on{background:#7a3b32}
+  #nvrUI .armSlider .knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#e9eaec;transition:left .12s}
+  #nvrUI .armSlider.on .knob{left:32px}
 
   /* win panel */
   #winPanel{
@@ -500,8 +505,8 @@ const LEVEL = {
     // flammable goods crate, east room
     { x:6, y:0.5, z:-4, sx:1, sy:1, sz:1, m:'crate', c:1,o:1,p:1 },
     // vehicle gate piers, at the south fence opening
-    { x:3.5, y:0.75, z:17, sx:0.3, sy:1.5, sz:0.3, m:'post', c:1,o:1,p:1 },
-    { x:6.5, y:0.75, z:17, sx:0.3, sy:1.5, sz:0.3, m:'post', c:1,o:1,p:1 },
+    { x:3.5, y:1.1, z:17, sx:0.5, sy:2.2, sz:0.5, m:'post', c:1,o:1,p:1 },
+    { x:6.5, y:1.1, z:17, sx:0.5, sy:2.2, sz:0.5, m:'post', c:1,o:1,p:1 },
   ],
 
   zones: [
@@ -849,19 +854,40 @@ const matFence = new THREE.MeshLambertMaterial({ color:0x8a9299 });
   fenceRun(-2.5, FZ1,  3.5, FZ1);
   fenceRun(6.5,  FZ1,  FX1, FZ1);
 
-  // vehicle gate, slid open and stacked against the fence east of the opening
-  function gatePanel(cx, cz, w) {
-    addBox(cx, 1.1, cz, w, 0.05, 0.05, matFence, {});   // top rail
-    addBox(cx, 0.5, cz, w, 0.05, 0.05, matFence, {});   // bottom rail
-    const bars = Math.max(2, Math.round(w / 0.28));
-    const barGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.62, 6);
-    for (let i = 0; i <= bars; i++) {
-      const b = new THREE.Mesh(barGeo, matFence);
-      b.position.set(cx - w/2 + w*i/bars, 0.8, cz);
-      scene.add(b);
-    }
+  // --- obvious vehicle gate ---
+  const matHazardY = new THREE.MeshLambertMaterial({ color:0xe4c12a });
+  const matHazardK = new THREE.MeshLambertMaterial({ color:0x1c1c1c });
+  const matSignBlue = new THREE.MeshLambertMaterial({ color:0x1f4f8f });
+  const matSignWhite = new THREE.MeshLambertMaterial({ color:0xf2f2ee });
+  // pier caps + hazard bands on each pier
+  for (const px of [3.5, 6.5]) {
+    addBox(px, 2.26, FZ1, 0.6, 0.12, 0.6, matFence, {});       // cap
+    addBox(px, 0.35, FZ1 + 0.26, 0.52, 0.5, 0.02, matHazardY, {});   // hazard plate facing the road (south)
+    for (let i = 0; i < 3; i++) addBox(px - 0.16 + i*0.16, 0.35, FZ1 + 0.272, 0.06, 0.5, 0.02, matHazardK, {});
   }
-  gatePanel(8.5, FZ1, 3.4);
+  // tracked sliding gate (taller, framed, braced), parked open east of the opening
+  function slidingGate(cx, cz, w) {
+    const top = 1.7, bot = 0.35, h = top - bot, cy = (top + bot) / 2;
+    addBox(cx, top, cz, w, 0.08, 0.08, matFence, {});   // top rail
+    addBox(cx, bot, cz, w, 0.08, 0.08, matFence, {});   // bottom rail
+    addBox(cx - w/2, cy, cz, 0.08, h, 0.08, matFence, {}); addBox(cx + w/2, cy, cz, 0.08, h, 0.08, matFence, {});   // end stiles
+    const bars = Math.max(3, Math.round(w / 0.26));
+    const barGeo = new THREE.CylinderGeometry(0.022, 0.022, h, 6);
+    for (let i = 1; i < bars; i++) { const b = new THREE.Mesh(barGeo, matFence); b.position.set(cx - w/2 + w*i/bars, cy, cz); scene.add(b); }
+    const brace = new THREE.Mesh(boxGeo, matFence); brace.scale.set(Math.hypot(w, h), 0.06, 0.05);
+    brace.position.set(cx, cy, cz); brace.rotation.z = Math.atan2(h, w); scene.add(brace);
+    addBox(cx, bot - 0.32, cz, w + 0.4, 0.04, 0.12, matRoadLine, {});   // ground track
+  }
+  slidingGate(9.0, FZ1, 3.6);
+  // CCTV-in-operation warning sign on a post by the west pier, facing the road
+  {
+    const px = 2.5, pz = 16.6;
+    addBox(px, 0.95, pz, 0.06, 1.9, 0.06, matFence, {});         // sign post
+    addBox(px, 1.75, pz, 0.5, 0.4, 0.04, matSignBlue, {});       // blue board
+    addBox(px, 1.86, pz + 0.03, 0.16, 0.1, 0.05, matBodyB, {});  // camera body glyph
+    addBox(px + 0.1, 1.86, pz + 0.05, 0.06, 0.06, 0.05, matBodyB, {}); // lens
+    addBox(px, 1.62, pz + 0.03, 0.42, 0.05, 0.03, matSignWhite, {});   // underline (stands for text)
+  }
 }
 
 /* ---------------- parked cars ---------------- */
@@ -1036,6 +1062,33 @@ function makeBollard(x, z) {
 makeBollard(-4.4, 6.9);
 makeBollard(-1.6, 6.9);
 
+/* ---------------- flammable goods dressing ---------------- */
+// Makes the flammable store (around the crate at x6, z-4) obvious.
+const matFlamRed   = new THREE.MeshLambertMaterial({ color:0xb5302a });
+const matHazOrange = new THREE.MeshLambertMaterial({ color:0xe07b1f });
+// red gas cylinders clustered by the flammable crate
+{
+  const cylGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.8, 12);
+  const capGeo = new THREE.CylinderGeometry(0.07, 0.1, 0.18, 8);
+  for (const [cxx, czz] of [[6.85, -4.4], [7.05, -4.0], [6.7, -3.65]]) {
+    const b = new THREE.Mesh(cylGeo, matFlamRed); b.position.set(cxx, 0.4, czz); scene.add(b);
+    const c = new THREE.Mesh(capGeo, matBodyB);   c.position.set(cxx, 0.89, czz); scene.add(c);
+  }
+  // jerry can
+  addBox(5.3, 0.22, -4.1, 0.34, 0.44, 0.2, matFlamRed, { collide:1 });
+  addBox(5.3, 0.47, -4.18, 0.06, 0.12, 0.06, matBodyB, {});   // spout
+}
+// hazard placard on the east wall, facing into the room (-x)
+{
+  const sxp = 8.78, syp = 2.1, szp = -4;
+  addBox(sxp, syp, szp, 0.04, 0.5, 0.5, matHazOrange, {});
+  const f1 = new THREE.Mesh(boxGeo, matBodyB); f1.scale.set(0.03, 0.28, 0.07); f1.position.set(sxp - 0.03, syp, szp - 0.03); f1.rotation.x = 0.5;  scene.add(f1);
+  const f2 = new THREE.Mesh(boxGeo, matBodyB); f2.scale.set(0.03, 0.22, 0.07); f2.position.set(sxp - 0.03, syp, szp + 0.08); f2.rotation.x = -0.4; scene.add(f2);
+}
+// orange/black hazard floor stripe along the store zone's open edge
+for (let i = 0; i < 7; i++)
+  addBox(5.1 + i*0.5, 0.02, -2.5, 0.34, 0.02, 0.2, i % 2 ? matBodyB : matHazOrange, {});
+
 /* ---------------- player / global state ---------------- */
 
 const player = { x:LEVEL.spawn.x, z:LEVEL.spawn.z, yaw:LEVEL.spawn.yaw, pitch:0, y:0, vy:0, onGround:true };
@@ -1055,6 +1108,7 @@ let smtpPack = null;            // {server, port, email} issued on first accepte
 let surveyPass = false, prevSurveyPass = false, lastTotal = 0;
 let scheduleSubmitted = false, configDirty = false;
 let nvrConnected = false;
+let nvrArmed = false;   // disarmed by default; must be armed for the walk test, disarmed to finish
 let provisionRemaining = 0, packIssued = false;
 let walkDone = false;
 let call = null;                // {order:[], idx, progress, lines:[]}
@@ -1773,6 +1827,8 @@ function renderNVR() {
   body.innerHTML =
     '<div class="nh">NVR \u00B7 ' + esc(LEVEL.name) + '</div>' +
     '<div class="stat">STATUS: ' + stat + '</div>' +
+    '<div class="armRow">SYSTEM <span class="' + (nvrArmed ? 'bad' : 'ok') + '">' + (nvrArmed ? 'ARMED' : 'DISARMED') + '</span>' +
+    '<div id="armSlider" class="armSlider' + (nvrArmed ? ' on' : '') + '"><div class="knob"></div></div></div>' +
     '<button class="uiBtn" id="nLive">LIVE VIEW</button>' +
     '<div style="margin-top:14px;border-top:1px solid rgba(255,255,255,.15);padding-top:8px">' +
     '<div style="letter-spacing:.16em;font-size:10.5px;color:var(--osd-dim)">NETWORK \u00B7 EMAIL ALARM SETTINGS</div>' +
@@ -1784,6 +1840,18 @@ function renderNVR() {
     '<button class="uiBtn" id="nClose">CLOSE</button></div>';
   document.getElementById('nClose').onclick = closeUI;
   document.getElementById('nLive').onclick = () => { closeUI(); enterFeed(); };
+  document.getElementById('armSlider').onclick = () => {
+    nvrArmed = !nvrArmed;
+    Sound.ui();
+    if (nvrArmed && call) call.armedHintShown = false;
+    if (!nvrArmed && call && call.awaitingDisarm) {
+      call.lines.push('"That’s everything tested then. Providing we have been given the site schedule and Keyholders we will be able to start monitoring the site for you. Nice work."');
+      closeUI();
+      finishCall();
+      return;
+    }
+    renderNVR();
+  };
   document.getElementById('nSave').onclick = () => {
     const msg = document.getElementById('nMsg');
     if (!smtpPack) { msg.innerHTML = '<span class="bad">\u2717 NO ARC ACCOUNT DETAILS. Lodge a schedule on the portal first.</span>'; return; }
@@ -2048,7 +2116,7 @@ function restoreCones() {
 
 function startCall() {
   const order = shuffle(placed.filter(c => c.alarm && c.alarm !== 'view').slice());
-  call = { order, idx:0, progress:0, lines:[] };
+  call = { order, idx:0, progress:0, lines:[], armedHintShown:false, awaitingDisarm:false };
   call.lines.push('"Arc Monitoring... You’d like to do a walk test? No problem can I take your engineer password please?."');
   call.lines.push('"Walk test for ' + esc(LEVEL.name) + ', ' + order.length + ' cameras to test."');
   if (!order.length) finishCall();
@@ -2064,20 +2132,29 @@ function finishCall() {
 }
 
 function updateCall(dt) {
-  if (!call || call.idx >= call.order.length) return;
+  if (!call || call.awaitingDisarm || call.idx >= call.order.length) return;
   const target = call.order[call.idx];
   const seen = camSees(target, player.x, WALK_Y, player.z);
   if (seen) call.progress += dt;
   else call.progress = Math.max(0, call.progress - dt * 2);
   if (call.progress >= WALK_HOLD) {
+    call.progress = 0;
+    if (!nvrArmed) {   // activations only signal when the system is armed
+      if (!call.armedHintShown) {
+        call.lines.push('"Hm, I\u2019m not getting any alarms coming in. Can you check the system is armed at the NVR?"');
+        call.armedHintShown = true;
+        Sound.invalid();
+      }
+      return;
+    }
     const kind = target.alarm === 'thermal' ? 'Thermal activation' : 'Intrusion';
     call.lines.push('"' + kind + ' received, ' + esc(target.name) + '."');
     call.idx++;
-    call.progress = 0;
     Sound.activate();
     if (call.idx >= call.order.length) {
-      call.lines.push('"That\u2019s everything tested then. Providing we have been given the site schedule and Keyholders we will be able to start monitoring the site for you. Nice work."');
-      setTimeout(() => { if (call) finishCall(); }, 1200);
+      call.awaitingDisarm = true;
+      restoreCones();
+      call.lines.push('"That\u2019s all the cameras tested. Can you head back and disarm the NVR for me to finish up?"');
     } else {
       call.lines.push('"Next one: activate ' + esc(call.order[call.idx].name) + '."');
       highlightWalkTarget();
@@ -2092,7 +2169,11 @@ const objText = document.getElementById('objText');
 
 function objectiveLine() {
   if (walkDone) return 'Job complete — site is on watch.';
-  if (call) return 'Walk test: stand in each named camera’s view to prove it.';
+  if (call) {
+    if (call.awaitingDisarm) return 'All cameras tested — disarm the NVR to finish the walk test.';
+    if (!nvrArmed) return 'Arm the NVR (server room) so activations reach the ARC.';
+    return 'Walk test: stand in each named camera’s view to activate it.';
+  }
   if (!surveyPass && !scheduleSubmitted)
     return 'Install cameras to reach ' + LEVEL.target + '% coverage and cover every required zone.';
   if (configDirty) return 'Camera set changed — resubmit the schedule on the ARC portal.';
