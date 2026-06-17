@@ -49,6 +49,11 @@
 
   /* stage tracker */
   #stageChip{top:14px;left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:.12em;color:var(--osd-dim)}
+
+  /* current objective */
+  #objective{top:46px;left:50%;transform:translateX(-50%);font-size:11.5px;letter-spacing:.06em;max-width:70vw;text-align:center}
+  #objective .olabel{color:var(--ok);font-size:9.5px;letter-spacing:.18em;margin-right:8px}
+  #objText{color:#fff}
   #stageChip .sep{margin:0 8px;opacity:.4}
   #stageChip .done{color:var(--ok)}
   #stageChip .cur{color:#fff}
@@ -152,7 +157,7 @@
   body.feed #covChip, body.feed #recChip, body.feed #cross,
   body.feed #hotbar, body.feed #hints, body.feed #aimMsg,
   body.feed #intPrompt, body.feed #stageChip, body.feed #phone,
-  body.feed #lookLabel { display:none !important }
+  body.feed #lookLabel, body.feed #objective { display:none !important }
   body.feed canvas{ filter:saturate(.5) contrast(1.07) brightness(.96) }
 
   #feedUI{display:none}
@@ -302,6 +307,8 @@
 </div>
 
 <div id="stageChip" class="chip"><span id="st1">1 INSTALL</span><span class="sep">&rsaquo;</span><span id="st2">2 COMMISSION</span><span class="sep">&rsaquo;</span><span id="st3">3 WALK TEST</span></div>
+
+<div id="objective" class="chip"><span class="olabel">OBJECTIVE</span> <span id="objText"></span></div>
 
 <div id="recChip" class="chip"><span id="recDot"></span><span>REC</span><span class="dim">&middot;</span><span id="siteName" class="dim"></span></div>
 
@@ -1097,8 +1104,8 @@ function lockPointer() {
 
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === renderer.domElement;
-  overlay.style.display = (locked || uiOpen) ? 'none' : 'flex';
-  if (!locked && mode === 'feed') exitFeed();
+  // feed view stays up even without pointer lock (its controls are keys only)
+  overlay.style.display = (locked || uiOpen || mode === 'feed') ? 'none' : 'flex';
 });
 
 document.addEventListener('mousemove', e => {
@@ -1574,15 +1581,17 @@ const winPanel = document.getElementById('winPanel');
 let winOpen = false;
 
 function openWin() {
-  const left = LEVEL.budget - spent;
-  let stars = 1;
-  if (lastTotal >= 90) stars = 2;
-  if (lastTotal >= 90 && left >= 300) stars = 3;
-  document.getElementById('winStars').textContent = '\u2605'.repeat(stars) + '\u2606'.repeat(3 - stars);
+  const left = Math.max(0, LEVEL.budget - spent);
+  // out of 10, lenient: 6 just for finishing, up to 2.5 for coverage above target, up to 1.5 for budget
+  const covBonus = clamp((lastTotal - LEVEL.target) / (100 - LEVEL.target), 0, 1) * 2.5;
+  const budBonus = devNoBudget ? 1.5 : clamp(left / LEVEL.budget, 0, 1) * 1.5;
+  const score = Math.round(clamp(6 + covBonus + budBonus, 0, 10) * 10) / 10;
+  const rating = score >= 9 ? 'EXCELLENT' : score >= 7.5 ? 'GREAT' : score >= 6 ? 'GOOD' : 'COMPLETE';
+  document.getElementById('winStars').textContent = score.toFixed(1) + ' / 10  \u00B7  ' + rating;
   document.getElementById('winStats').innerHTML =
     '<span>COVERAGE</span> ' + lastTotal.toFixed(1) + '%<br>' +
     '<span>CAMERAS</span> ' + placed.length + '<br>' +
-    '<span>BUDGET LEFT</span> \u00A3' + left + '<br>' +
+    '<span>BUDGET LEFT</span> ' + (devNoBudget ? '\u221E' : '\u00A3' + left) + '<br>' +
     '<span>WALK TEST</span> PASSED';
   winPanel.style.display = 'flex';
   winOpen = true;
@@ -1651,9 +1660,11 @@ function renderPortal() {
       '<span>ARC PHONE</span><b>0117 496 0900</b>' +
       '</div></div>' +
       '<p>Enter the SMTP details into your NVR network settings. ' +
-      (provisionRemaining > 0
-        ? 'Provisioning in progress: allow ' + fmtMSS(provisionRemaining) + ' before the walk test.'
-        : 'Provisioning complete. Phone the ARC for your walk test when the NVR is connected.') + '</p>' +
+      (!nvrConnected
+        ? 'Provisioning begins once the NVR connection test passes.'
+        : provisionRemaining > 0
+          ? 'Provisioning in progress: allow ' + fmtMSS(provisionRemaining) + ' before the walk test.'
+          : 'Provisioning complete. Phone the ARC for your walk test.') + '</p>' +
       '<button class="uiBtn plain" id="pAmend">AMEND SCHEDULE</button>' +
       '<button class="uiBtn primary" id="pClose">CLOSE</button>';
     document.getElementById('pClose').onclick = closeUI;
@@ -1737,7 +1748,7 @@ function submitPortal() {
       port: '587',
       email: 'unit1-' + Math.floor(1000 + Math.random()*9000) + '@alarms.arc-monitoring.net',
     };
-    provisionRemaining = PROVISION_S;
+    // provisioning is kicked off by the NVR connection test, not the schedule submit
   }
   updateStageChip();
   Sound.confirm();
@@ -1775,7 +1786,9 @@ function renderNVR() {
       document.getElementById('nPort').value.trim()               === smtpPack.port &&
       document.getElementById('nMail').value.trim().toLowerCase() === smtpPack.email;
     if (ok) {
+      const wasConnected = nvrConnected;
       nvrConnected = true;
+      if (!wasConnected) provisionRemaining = PROVISION_S;   // provisioning starts now
       msg.innerHTML = '<span class="ok">\u2713 TEST EMAIL DELIVERED. ARC CONNECTED.</span>';
       updateStageChip();
       Sound.confirm();
@@ -1826,6 +1839,7 @@ function exitFeed() {
   ptCloud.visible = prevPtVisible;
   fovRoot.visible = true;
   if (roofMesh) roofMesh.visible = prevRoofVisible;
+  if (!locked && !uiOpen) overlay.style.display = 'flex';   // let the player click to resume
 }
 function cycleFeed(dir) {
   if (!placed.length) return;
@@ -2051,6 +2065,32 @@ function updateCall(dt) {
   }
 }
 
+/* ---------------- current objective ---------------- */
+
+const objectiveEl = document.getElementById('objective');
+const objText = document.getElementById('objText');
+
+function objectiveLine() {
+  if (walkDone) return 'Job complete — site is on watch.';
+  if (call) return 'Walk test: stand in each named camera’s view to prove it.';
+  if (!surveyPass && !scheduleSubmitted)
+    return 'Install cameras to reach ' + LEVEL.target + '% coverage and cover every required zone.';
+  if (configDirty) return 'Camera set changed — resubmit the schedule on the ARC portal.';
+  if (!scheduleSubmitted)
+    return laptopGroup
+      ? 'Press Q on the laptop to open the ARC portal and submit the schedule.'
+      : 'Take the LAPTOP (slot 8) and place it on a surface near the server room.';
+  if (!nvrConnected) return 'Enter the SMTP details into the NVR (server room) and run the test.';
+  if (provisionRemaining > 0) return 'Wait out provisioning — pass the time at the van.';
+  return 'Press C to phone the ARC and start the walk test.';
+}
+
+function updateObjective(show) {
+  if (!show) { objectiveEl.style.display = 'none'; return; }
+  objText.textContent = objectiveLine();
+  objectiveEl.style.display = 'block';
+}
+
 /* ---------------- phone HUD ---------------- */
 
 const phone = document.getElementById('phone');
@@ -2072,11 +2112,11 @@ function updatePhone() {
     h += '<div class="pBig pOk">JOB COMPLETE \u2713</div><div class="pDim">Site is on watch.</div>';
   } else if (configDirty) {
     h += '<div class="pWarn">CONFIG CHANGED</div><div class="pDim">Resubmit the schedule on the portal.</div>';
+  } else if (!nvrConnected) {
+    h += '<div class="pOk">SCHEDULE LODGED \u2713</div><div class="pDim">Enter the SMTP settings on the NVR to start provisioning.</div>';
   } else if (provisionRemaining > 0) {
     h += '<div class="pDim">PROVISIONING</div><div class="pBig">' + fmtMSS(provisionRemaining) + '</div>';
     h += '<div class="pDim">' + (vanMode ? 'time x' + VAN_TIMESCALE + ' \u2713' : 'pass the time in the van') + '</div>';
-  } else if (!nvrConnected) {
-    h += '<div class="pOk">PROVISIONED \u2713</div><div class="pDim">Enter the email settings on the NVR.</div>';
   } else {
     h += '<div class="pOk">SITE READY</div><div class="pDim">Press <b style="color:var(--osd)">C</b> to call the ARC for the walk test.</div>';
   }
@@ -2139,15 +2179,17 @@ document.addEventListener('keydown', e => {
 
   if (e.code === 'Backquote') { toggleDev(); return; }
   if (uiOpen) { if (e.code === 'Escape') closeUI(); return; }
-  if (!locked) return;
-  if (winOpen && e.code === 'Enter') { closeWin(); return; }
 
+  // feed view controls work even without pointer lock (keys only)
   if (mode === 'feed') {
-    if (e.code === 'KeyQ') exitFeed();
+    if (e.code === 'KeyQ' || e.code === 'Escape') exitFeed();
     else if (e.code === 'KeyA' || e.code === 'ArrowLeft')  cycleFeed(-1);
     else if (e.code === 'KeyD' || e.code === 'ArrowRight') cycleFeed(1);
     return;
   }
+
+  if (!locked) return;
+  if (winOpen && e.code === 'Enter') { closeWin(); return; }
 
   if (vanMode) {
     if (e.code === 'KeyQ') exitVan();
@@ -2316,6 +2358,7 @@ function animate() {
     }
     if (call) updateCall(dt);
     updatePhone();
+    updateObjective(!vanMode && !uiOpen);
     renderer.render(scene, camera);
   } else {
     updateFeedClock();
