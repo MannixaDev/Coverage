@@ -610,6 +610,7 @@ const MATS = {
 const matBodyA  = new THREE.MeshLambertMaterial({ color:0xe9eaec });
 const matBodyB  = new THREE.MeshLambertMaterial({ color:0x23262a });
 const matScreen = new THREE.MeshBasicMaterial({ color:0x16242c });
+const matRoadLine = new THREE.MeshLambertMaterial({ color:0xd9d6cc });
 
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 
@@ -619,6 +620,7 @@ const colliders     = [];
 const occluders     = [];
 const placeSurfaces = [];
 let roofMesh = null;
+const SITE = 0;   // selected site index; site-specific dressing is gated on this
 
 function addBox(cx, cy, cz, sx, sy, sz, mat, opt = {}) {
   const m = new THREE.Mesh(boxGeo, mat);
@@ -644,7 +646,7 @@ for (const b of LEVEL.boxes) {
 /* ---------------- hardstanding + roads ---------------- */
 // Thin flat slabs laid just above the grass. Concrete apron under the building,
 // tarmac for the public street, the gate drive, the cross road and car park.
-const matRoadLine = new THREE.MeshLambertMaterial({ color:0xd9d6cc });
+if (SITE === 0) {   // ---- site 1 dressing, part A: roads, cladding, entrance ----
 function addFlat(cx, cz, sx, sz, mat, y) { addBox(cx, y, cz, sx, 0.03, sz, mat, {}); }
 
 addFlat(0, 0.5, 22, 17, MATS.concrete, -0.055);    // concrete apron around the building
@@ -722,6 +724,7 @@ addBox(-3, 2.55, 6.23, 2.6, 0.04, 0.04, matFascia, {});   // underline stripe
   const dot = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), matFascia);
   dot.position.set(-4.0, 2.82, 6.27); scene.add(dot);
 }
+}   // ---- end site 1 dressing part A ----
 
 // NVR desk + monitor + recorder
 const nvrPos = LEVEL.nvr;
@@ -828,6 +831,7 @@ const VAN_SEAT = { x: LEVEL.van.x + 0.55, y: 1.5, z: LEVEL.van.z + 0.45, yaw: -M
 // Galvanised steel palisade. Posts and bars are decorative meshes; the two
 // rails per run double as the player collider so the perimeter contains you.
 // Not occluders: too thin to meaningfully block a camera sightline.
+if (SITE === 0) {   // ---- site 1 dressing, part B: fence, gate, scenery, furniture ----
 const matFence = new THREE.MeshLambertMaterial({ color:0x8a9299 });
 {
   const FX0 = -19, FX1 = 19, FZ0 = -17, FZ1 = 17;   // perimeter encloses all coverage dots
@@ -1096,6 +1100,7 @@ const matHazOrange = new THREE.MeshLambertMaterial({ color:0xe07b1f });
 // orange/black hazard floor stripe along the store zone's open edge
 for (let i = 0; i < 7; i++)
   addBox(5.1 + i*0.5, 0.02, -2.5, 0.34, 0.02, 0.2, i % 2 ? matBodyB : matHazOrange, {});
+}   // ---- end site 1 dressing part B ----
 
 /* ---------------- player / global state ---------------- */
 
