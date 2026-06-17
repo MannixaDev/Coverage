@@ -158,6 +158,12 @@
   body.feed #hotbar, body.feed #hints, body.feed #aimMsg,
   body.feed #intPrompt, body.feed #stageChip, body.feed #phone,
   body.feed #lookLabel, body.feed #objective { display:none !important }
+
+  /* van mode hides the gameplay HUD, keeping the SCROLLBOOK, van hint and phone */
+  body.van #covChip, body.van #stageChip, body.van #recChip,
+  body.van #hotbar, body.van #hints, body.van #cross,
+  body.van #objective, body.van #aimMsg, body.van #lookLabel,
+  body.van #intPrompt { display:none !important }
   body.feed canvas{ filter:saturate(.5) contrast(1.07) brightness(.96) }
 
   #feedUI{display:none}
@@ -753,7 +759,7 @@ addBox(np.x + 0.12, 0.765, np.z + 0.18, 0.06, 0.02,  0.09, matBodyB, {});
 {
   const v = LEVEL.van;
   const W = 2.0;
-  const matVanGlass = new THREE.MeshLambertMaterial({ color:0x1b2a33 });
+  const matVanGlass = new THREE.MeshLambertMaterial({ color:0x223540, transparent:true, opacity:0.4, depthWrite:false });
   const matLight2 = new THREE.MeshLambertMaterial({ color:0xf2efd8 });
   // tall panel body (cab + cargo)
   addBox(v.x - 0.3, 1.45, v.z, 4.0, 1.9, W, MATS.van, { collide:1, occlude:1 });
@@ -1343,7 +1349,7 @@ let fovVisible = true;
 function markDirty() {
   if (!scheduleSubmitted) return;
   configDirty = true;
-  if (call) { call = null; }   // operator drops the test on a config change
+  if (call) { call = null; restoreCones(); }   // operator drops the test on a config change
   updateStageChip();
 }
 
@@ -1657,7 +1663,7 @@ function renderPortal() {
       '<span>SMTP SERVER</span><b>' + smtpPack.server + '</b>' +
       '<span>SMTP PORT</span><b>' + smtpPack.port + '</b>' +
       '<span>ALARM EMAIL</span><b>' + smtpPack.email + '</b>' +
-      '<span>ARC PHONE</span><b>0117 496 0900</b>' +
+      '<span>ARC PHONE</span><b>0344 933 9999</b>' +
       '</div></div>' +
       '<p>Enter the SMTP details into your NVR network settings. ' +
       (!nvrConnected
@@ -1948,6 +1954,7 @@ function scrollFeed(dir) {
 
 function enterVan() {
   vanMode = true;
+  document.body.classList.add('van');
   prevPlayerState = { x:player.x, z:player.z, yaw:player.yaw, pitch:player.pitch };
   feedApp.style.display = 'block';
   vanHint.style.display = 'block';
@@ -1957,6 +1964,7 @@ function enterVan() {
 }
 function exitVan() {
   vanMode = false;
+  document.body.classList.remove('van');
   feedApp.style.display = 'none';
   vanHint.style.display = 'none';
   if (prevPlayerState) Object.assign(player, prevPlayerState);
@@ -2028,18 +2036,29 @@ function phoneReady() {
          nvrConnected && !walkDone && !call;
 }
 
+// during the walk test, show only the current target's cone; otherwise follow fovVisible
+function highlightWalkTarget() {
+  if (!call || call.idx >= call.order.length) return;
+  const tgt = call.order[call.idx];
+  placed.forEach(c => { if (c.cone) c.cone.visible = (c === tgt); });
+}
+function restoreCones() {
+  placed.forEach(c => { if (c.cone) c.cone.visible = fovVisible; });
+}
+
 function startCall() {
   const order = shuffle(placed.filter(c => c.alarm && c.alarm !== 'view').slice());
   call = { order, idx:0, progress:0, lines:[] };
-  call.lines.push('"Arc Monitoring, go ahead."');
-  call.lines.push('"Walk test for ' + esc(LEVEL.name) + ', ' + order.length + ' channels to prove."');
+  call.lines.push('"Arc Monitoring... You’d like to do a walk test? No problem can I take your engineer password please?."');
+  call.lines.push('"Walk test for ' + esc(LEVEL.name) + ', ' + order.length + ' cameras to test."');
   if (!order.length) finishCall();
-  else call.lines.push('"Activate ' + esc(order[0].name) + ' for me please."');
+  else { call.lines.push('"Can you activate ' + esc(order[0].name) + ' for me please."'); highlightWalkTarget(); }
 }
 
 function finishCall() {
   walkDone = true;
   call = null;
+  restoreCones();
   updateStageChip();
   openWin();
 }
@@ -2057,10 +2076,11 @@ function updateCall(dt) {
     call.progress = 0;
     Sound.activate();
     if (call.idx >= call.order.length) {
-      call.lines.push('"That\u2019s everything proving. Site\u2019s on watch. Nice work."');
+      call.lines.push('"That\u2019s everything tested then. Providing we have been given the site schedule and Keyholders we will be able to start monitoring the site for you. Nice work."');
       setTimeout(() => { if (call) finishCall(); }, 1200);
     } else {
       call.lines.push('"Next one: activate ' + esc(call.order[call.idx].name) + '."');
+      highlightWalkTarget();
     }
   }
 }
@@ -2102,7 +2122,7 @@ function updatePhone() {
   let h = '<div class="pTitle">ARC MONITORING</div>';
 
   if (call) {
-    h += '<div class="pDim">ON CALL \u00B7 0117 496 0900</div>';
+    h += '<div class="pDim">ON CALL \u00B7 0344 933 9999</div>';
     h += call.lines.slice(-3).map(l => '<div>' + l + '</div>').join('');
     if (call.idx < call.order.length) {
       h += '<div class="pBar"><i style="width:' + Math.min(100, call.progress / WALK_HOLD * 100) + '%"></i></div>';
@@ -2203,7 +2223,7 @@ document.addEventListener('keydown', e => {
     else if (n >= 2 && n <= CAM_TYPES.length + 1) selectSlot(n - 2);
   }
   else if (e.code === 'KeyE') removeLooked();
-  else if (e.code === 'KeyF') { fovVisible = !fovVisible; placed.forEach(c => c.cone.visible = fovVisible); }
+  else if (e.code === 'KeyF') { fovVisible = !fovVisible; placed.forEach(c => c.cone.visible = fovVisible); highlightWalkTarget(); }
   else if (e.code === 'KeyG') ptCloud.visible = !ptCloud.visible;
   else if (e.code === 'KeyR') { if (roofMesh) roofMesh.visible = !roofMesh.visible; }
   else if (e.code === 'KeyQ') { const it = nearestInteractable(); if (it) it.act(); }
