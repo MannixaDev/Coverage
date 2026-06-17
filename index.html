@@ -507,12 +507,12 @@ const LEVEL = {
 /* ---------------- catalogue ---------------- */
 
 const CAM_TYPES = [
-  { id:'bullet',  name:'BULLET',  mount:['wall'],           fov:60,  range:12, cost:80,  color:0x4db8ff },
-  { id:'dome',    name:'DOME',    mount:['wall','ceiling'], fov:90,  range:9,  cost:100, color:0xffd24d },
-  { id:'turret',  name:'TURRET',  mount:['wall','ceiling'], fov:100, range:8,  cost:120, color:0xb98cff },
-  { id:'fisheye', name:'FISHEYE', mount:['ceiling'],        fov:360, range:5,  cost:180, color:0x7dff9e },
-  { id:'anpr',    name:'ANPR',    mount:['wall'],           fov:25,  range:15, cost:350, color:0xffa54d },
-  { id:'thermal', name:'THERMAL', mount:['wall','ceiling'], fov:70,  range:10, cost:500, color:0xff5e8a },
+  { id:'bullet',  name:'BULLET',  mount:['wall'],           fov:80,  range:16, cost:80,  color:0x4db8ff },
+  { id:'dome',    name:'DOME',    mount:['wall','ceiling'], fov:115, range:13, cost:100, color:0xffd24d },
+  { id:'turret',  name:'TURRET',  mount:['wall','ceiling'], fov:125, range:12, cost:120, color:0xb98cff },
+  { id:'fisheye', name:'FISHEYE', mount:['ceiling'],        fov:360, range:8,  cost:180, color:0x7dff9e },
+  { id:'anpr',    name:'ANPR',    mount:['wall'],           fov:42,  range:22, cost:350, color:0xffa54d },
+  { id:'thermal', name:'THERMAL', mount:['wall','ceiling'], fov:95,  range:15, cost:500, color:0xff5e8a },
   { id:'laptop',  name:'LAPTOP',  item:true,                cost:0 },
 ];
 CAM_TYPES.forEach(t => { if (!t.item) t.cosHalf = Math.cos(D2R(Math.min(t.fov, 180) / 2)); });
@@ -651,6 +651,51 @@ cladH(-6.5, 6.18, 5.0);           // south, west of the door
 cladH(3.5,  6.18, 11.0);          // south, east of the door
 cladV(9.18,  0, 12.6);            // east
 cladV(-9.18, 0, 12.6);            // west
+
+/* ---------------- glazed entrance + signage (south face) ---------------- */
+const matWindow  = new THREE.MeshLambertMaterial({ color:0x2a3c45, transparent:true, opacity:0.55 });
+const matMullion = new THREE.MeshLambertMaterial({ color:0x767b80 });
+const matSign    = new THREE.MeshLambertMaterial({ color:0xf2f2ee });
+
+// shopfront window band above the brick plinth, proud of the cladding
+function shopWindow(cx, w) {
+  const z = 6.24, y0 = 1.15, y1 = 2.45, h = y1 - y0, cy = (y0 + y1) / 2;
+  const g = new THREE.Mesh(boxGeo, matWindow); g.scale.set(w, h, 0.04); g.position.set(cx, cy, z); scene.add(g);
+  const fr = (fx, fy, sx, sy) => { const m = new THREE.Mesh(boxGeo, matMullion); m.scale.set(sx, sy, 0.06); m.position.set(fx, fy, z + 0.01); scene.add(m); };
+  fr(cx, y0, w + 0.08, 0.08); fr(cx, y1, w + 0.08, 0.08);          // cill + head
+  fr(cx - w/2, cy, 0.08, h);  fr(cx + w/2, cy, 0.08, h);           // jambs
+  fr(cx, cy, 0.06, h);        fr(cx, cy, w, 0.06);                 // mullion + transom
+}
+shopWindow(-5.6, 1.8);
+shopWindow(-0.6, 2.0);
+shopWindow(5.0,  2.6);
+
+// glass entrance doors in the door gap (non-colliding so you can walk through)
+{
+  const dz = 6.08;
+  const g = new THREE.Mesh(boxGeo, matWindow); g.scale.set(1.8, 2.1, 0.04); g.position.set(-3, 1.05, dz); scene.add(g);
+  const fr = (fx, fy, sx, sy) => { const m = new THREE.Mesh(boxGeo, matMullion); m.scale.set(sx, sy, 0.07); m.position.set(fx, fy, dz + 0.01); scene.add(m); };
+  fr(-3, 2.1, 2.0, 0.1);                          // head
+  fr(-4, 1.05, 0.1, 2.1); fr(-2, 1.05, 0.1, 2.1); // jambs
+  fr(-3, 1.05, 0.08, 2.1);                        // central mullion
+  for (const hx of [-3.22, -2.78]) {
+    const h = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.4, 6), matBodyA);
+    h.position.set(hx, 1.0, dz + 0.06); scene.add(h);
+  }
+}
+
+// entrance canopy
+addBox(-3, 2.48, 5.65, 2.8, 0.1, 0.9, matMullion, {});
+
+// fascia sign board with a camera-lens logo
+addBox(-3, 2.78, 6.22, 2.6, 0.46, 0.05, matSign, {});
+addBox(-3, 2.55, 6.23, 2.6, 0.04, 0.04, matFascia, {});   // underline stripe
+{
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.035, 8, 18), matFascia);
+  ring.position.set(-4.0, 2.82, 6.26); scene.add(ring);
+  const dot = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), matFascia);
+  dot.position.set(-4.0, 2.82, 6.27); scene.add(dot);
+}
 
 // NVR desk + monitor + recorder
 const nvrPos = LEVEL.nvr;
@@ -1148,6 +1193,7 @@ let ghostValid = false;
 let ghostMount = 'wall';
 let selected = 0;
 let spent = 0;
+let devNoBudget = false;
 let laptopGroup = null;   // placed laptop, null when in inventory
 
 let aimPanW = 0,  aimTiltW = D2R(15);
@@ -1224,7 +1270,7 @@ function updateGhost() {
 
   const tooLow     = mount === 'wall' && hit.point.y < MIN_MOUNT_Y;
   const wrongMount = !mount || !type.mount.includes(mount);
-  const overBudget = type.cost > LEVEL.budget - spent;
+  const overBudget = !devNoBudget && type.cost > LEVEL.budget - spent;
   ghostValid = !wrongMount && !tooLow && !overBudget;
 
   let aimTxt = '';
@@ -1444,7 +1490,7 @@ function camSees(c, px, py, pz) {
   _v.divideScalar(d);
   if (_v.dot(c.dir) < c.type.cosHalf) return false;
   raySight.set(c.origin, _v);
-  raySight.far = Math.max(0, d - 0.12);
+  raySight.far = Math.max(0, d - 0.25);   // occlusion forgiveness near edges
   return raySight.intersectObjects(occluders, false).length === 0;
 }
 
@@ -1495,7 +1541,9 @@ function recompute() {
     'INSIDE ' + Math.round((inC / inTotal) * 100) + '% \u00B7 ' +
     'OUTSIDE ' + Math.round((outC / outTotal) * 100) + '% \u00B7 ' +
     'CAMS ' + placed.length;
-  covBudget.textContent = 'BUDGET \u00A3' + (LEVEL.budget - spent) + ' / \u00A3' + LEVEL.budget;
+  covBudget.textContent = devNoBudget
+    ? 'BUDGET \u221E (DEV)'
+    : 'BUDGET \u00A3' + (LEVEL.budget - spent) + ' / \u00A3' + LEVEL.budget;
   covZones.innerHTML = zones.map(z => {
     const done = z.got === z.total;
     return '<span class="z ' + (done ? 'ok' : 'bad') + '">' +
@@ -2165,6 +2213,7 @@ function renderDevMenu() {
     '</div>';
   devMenuEl.innerHTML =
     '<div class="dh">DEV MENU &middot; ` TO CLOSE</div>' +
+    '<button class="dbtn" id="dBudget">UNLIMITED BUDGET: ' + (devNoBudget ? 'ON' : 'OFF') + '</button>' +
     '<button class="dbtn" id="dFillPortal">AUTOFILL + OPEN PORTAL</button>' +
     '<button class="dbtn" id="dFillNVR">AUTOFILL NVR SMTP</button>' +
     '<button class="dbtn" id="dSkipProv">SKIP PROVISIONING</button>' +
@@ -2173,6 +2222,7 @@ function renderDevMenu() {
     '<div class="dsep"></div>' +
     '<button class="dbtn" id="dReload">RELOAD PAGE</button>' +
     stat;
+  document.getElementById('dBudget').onclick = () => { devNoBudget = !devNoBudget; recompute(); renderDevMenu(); };
   document.getElementById('dFillPortal').onclick = devFillPortal;
   document.getElementById('dFillNVR').onclick = devFillNVR;
   document.getElementById('dSkipProv').onclick = () => { provisionRemaining = 0; updateStageChip(); renderDevMenu(); };
