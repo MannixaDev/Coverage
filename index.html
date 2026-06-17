@@ -2363,6 +2363,7 @@ function renderDevMenu() {
     '</div>';
   devMenuEl.innerHTML =
     '<div class="dh">DEV MENU &middot; ` TO CLOSE</div>' +
+    '<button class="dbtn" id="dInstall">AUTO-INSTALL CAMERAS</button>' +
     '<button class="dbtn" id="dBudget">UNLIMITED BUDGET: ' + (devNoBudget ? 'ON' : 'OFF') + '</button>' +
     '<button class="dbtn" id="dFillPortal">AUTOFILL + OPEN PORTAL</button>' +
     '<button class="dbtn" id="dFillNVR">AUTOFILL NVR SMTP</button>' +
@@ -2372,6 +2373,7 @@ function renderDevMenu() {
     '<div class="dsep"></div>' +
     '<button class="dbtn" id="dReload">RELOAD PAGE</button>' +
     stat;
+  document.getElementById('dInstall').onclick = devAutoInstall;
   document.getElementById('dBudget').onclick = () => { devNoBudget = !devNoBudget; recompute(); renderDevMenu(); };
   document.getElementById('dFillPortal').onclick = devFillPortal;
   document.getElementById('dFillNVR').onclick = devFillNVR;
@@ -2402,6 +2404,48 @@ function devFillNVR() {
     if (p) p.value = smtpPack.port;
     if (m) m.value = smtpPack.email;
   }, 0);
+}
+
+function devPlaceCam(typeId, pos, dir) {
+  const type = CAM_TYPES.find(t => t.id === typeId);
+  const d = new THREE.Vector3(dir[0], dir[1], dir[2]).normalize();
+  const p = new THREE.Vector3(pos[0], pos[1], pos[2]);
+  const quat = new THREE.Quaternion().setFromUnitVectors(Z_AXIS, d);
+  const body = makeBody(type); body.position.copy(p); body.quaternion.copy(quat); camsRoot.add(body);
+  const cone = new THREE.Mesh(fovGeometry(type), fovMaterial(type));
+  cone.position.copy(p); cone.quaternion.copy(quat); cone.visible = fovVisible; fovRoot.add(cone);
+  camCounter++;
+  placed.push({ type, body, cone, name:'CAM ' + pad2(camCounter), alarm:null,
+    origin: p.clone().addScaledVector(d, 0.08), dir: d.clone() });
+  spent += type.cost;
+}
+
+function devAutoInstall() {
+  while (placed.length) { const c = placed.pop(); camsRoot.remove(c.body); fovRoot.remove(c.cone); }
+  spent = 0; camCounter = 0;
+  devNoBudget = true;   // the test set ignores cost
+  // interior: ceiling cameras per room
+  devPlaceCam('fisheye', [-3, 2.95, 1], [0, -1, 0]);
+  devPlaceCam('fisheye', [5,  2.95, 0], [0, -1, 0]);
+  devPlaceCam('dome',    [-7, 2.9, -4], [0, -1, 0]);            // server room
+  // required-type cameras at the three zones
+  devPlaceCam('thermal', [6.5, 2.9, -4], [0, -1, 0]);          // STORE (ceiling, straight down)
+  devPlaceCam('thermal', [9.35, 2.9, 0], [1, -0.7, 0]);        // REFUSE (east wall, over the bins)
+  devPlaceCam('anpr',    [5, 2.6, 6.35], [0, -0.18, 0.98]);    // GATE (south wall, toward the drive)
+  // exterior coverage around the building, aimed out with a slight downward tilt
+  const T = 0.14;
+  for (const x of [-8, -4, 0, 4, 8]) devPlaceCam('turret', [x, 2.8, -6.35], [0, -T, -1]);   // north
+  for (const x of [-8, -6, 3, 7])    devPlaceCam('turret', [x, 2.8, 6.35],  [0, -T, 1]);    // south (skips door)
+  for (const z of [-5, -2, 3, 5])    devPlaceCam('turret', [9.35, 2.8, z],  [1, -T, 0]);    // east
+  for (const z of [-5, -1.5, 2, 5])  devPlaceCam('turret', [-9.35, 2.8, z], [-1, -T, 0]);   // west
+  // corners with longer-range bullets
+  devPlaceCam('bullet', [9, 2.8, -6.35],  [1, -T, -1]);
+  devPlaceCam('bullet', [-9, 2.8, -6.35], [-1, -T, -1]);
+  devPlaceCam('bullet', [9, 2.8, 6.35],   [1, -T, 1]);
+  devPlaceCam('bullet', [-9, 2.8, 6.35],  [-1, -T, 1]);
+  markDirty();
+  recompute();
+  renderDevMenu();
 }
 
 function devCompleteCommission() {
