@@ -304,6 +304,14 @@
     margin-bottom:22px;
   }
   #overlay .ctl b{color:var(--osd);font-weight:600;text-align:right}
+  #overlay .sitePick{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px}
+  #overlay .sitePick .sl{font-size:10px;letter-spacing:.2em;color:var(--osd-dim)}
+  #overlay .siteBtn{
+    font-family:inherit;font-size:11px;letter-spacing:.12em;cursor:pointer;
+    padding:7px 16px;border-radius:3px;border:1px solid rgba(255,255,255,.25);
+    background:rgba(255,255,255,.06);color:var(--osd);
+  }
+  #overlay .siteBtn.cur{border-color:var(--ok);color:#fff;background:rgba(111,227,154,.14)}
   #overlay .go{font-size:13px;letter-spacing:.2em;color:var(--ok)}
   #overlay .note{margin-top:14px;font-size:10px;color:var(--osd-dim);letter-spacing:.08em}
 </style>
@@ -372,6 +380,11 @@
   <div class="panel">
     <h1>COVERAGE</h1>
     <div class="tag">CCTV INSTALLATION SIMULATOR &mdash; FOUNDATION BUILD</div>
+    <div class="sitePick" id="sitePick">
+      <span class="sl">SITE</span>
+      <button class="siteBtn" data-site="0">UNIT 1</button>
+      <button class="siteBtn" data-site="1">UNIT 7</button>
+    </div>
     <div class="brief" id="overlayBrief"></div>
     <div class="ctl">
       <b>WASD</b><span>move</span>
@@ -476,7 +489,7 @@ const Sound = (() => {
    LEVEL DATA
    ========================================================= */
 
-const LEVEL = {
+const LEVEL_1 = {
   name: 'UNIT 1',
   budget: 3500,
   target: 80,
@@ -529,6 +542,67 @@ const LEVEL = {
       exclude:[ { minX:-9.5, maxX:9.5, minZ:-6.5, maxZ:6.5 } ] },
   ],
 };
+
+// Site 2: a larger warehouse (24 x 16 m) with a NW office, an east loading bay,
+// and a fuel compound. Office orientation mirrors site 1 so shared equipment fits.
+const LEVEL_2 = {
+  name: 'UNIT 7',
+  budget: 5000,
+  target: 80,
+  spawn: { x:-2, z:11, yaw:0 },
+  bounds: { minX:-28, maxX:28, minZ:-24, maxZ:26 },
+  nvr:    { x:-9.5, z:-5.5 },
+  router: { x:-9.5, y:1.6, z:-7.8 },
+  van:    { x:6, z:23 },
+
+  boxes: [
+    // outer shell: 24 wide (x -12..12), 16 deep (z -8..8), 3 m walls
+    { x:0,    y:1.5, z:-8, sx:24.6, sy:3, sz:0.3,  m:'wall', c:1,o:1,p:1 },   // north
+    { x:-6.5, y:1.5, z:8,  sx:11.0, sy:3, sz:0.3,  m:'wall', c:1,o:1,p:1 },   // south, west of pedestrian door (gap x -1..1)
+    { x:6.5,  y:1.5, z:8,  sx:11.0, sy:3, sz:0.3,  m:'wall', c:1,o:1,p:1 },   // south, east of door
+    { x:-12,  y:1.5, z:0,  sx:0.3,  sy:3, sz:16.6, m:'wall', c:1,o:1,p:1 },   // west
+    { x:12,   y:1.5, z:-5, sx:0.3,  sy:3, sz:6.0,  m:'wall', c:1,o:1,p:1 },   // east, north of loading bay (gap z -2..2)
+    { x:12,   y:1.5, z:5,  sx:0.3,  sy:3, sz:6.0,  m:'wall', c:1,o:1,p:1 },   // east, south of loading bay
+    // NW office: x -12..-7, z -8..-3, door in south wall (gap x -9.5..-8.5)
+    { x:-7,     y:1.5, z:-5.5, sx:0.3, sy:3, sz:5.0, m:'wall', c:1,o:1,p:1 },
+    { x:-10.75, y:1.5, z:-3,   sx:2.5, sy:3, sz:0.3, m:'wall', c:1,o:1,p:1 },
+    { x:-7.75,  y:1.5, z:-3,   sx:1.5, sy:3, sz:0.3, m:'wall', c:1,o:1,p:1 },
+    // internal partition at z 0 (door gap x 2..4)
+    { x:-2.5, y:1.5, z:0, sx:9.0, sy:3, sz:0.3, m:'wall', c:1,o:1,p:1 },
+    { x:8,    y:1.5, z:0, sx:8.0, sy:3, sz:0.3, m:'wall', c:1,o:1,p:1 },
+    // roof, floor, ground
+    { x:0, y:3.125, z:0, sx:24.6, sy:0.25, sz:16.6, m:'roof',  o:1, p:1, roof:1 },
+    { x:0, y:-0.05, z:0, sx:24.6, sy:0.1,  sz:16.6, m:'floor', p:1 },
+    { x:0, y:-0.11, z:0, sx:64,   sy:0.1,  sz:56,   m:'ground', p:1 },
+    // outdoor obstacles
+    { x:16,  y:0.6, z:6,   sx:1.4, sy:1.2, sz:1.4, m:'crate', c:1,o:1,p:1 },
+    { x:-16, y:0.6, z:-10, sx:1.2, sy:1.2, sz:1.2, m:'crate', c:1,o:1,p:1 },
+    // chemical store crate, inside NE room
+    { x:8, y:0.5, z:-5, sx:1.2, sy:1, sz:1.2, m:'crate', c:1,o:1,p:1 },
+    // fuel compound drums, outside east near the loading bay
+    { x:16, y:0.5, z:-1, sx:1, sy:1, sz:1, m:'bin', c:1,o:1,p:1 },
+    { x:16, y:0.5, z:1,  sx:1, sy:1, sz:1, m:'bin', c:1,o:1,p:1 },
+    // vehicle gate piers, south perimeter
+    { x:4.5, y:1.1, z:21, sx:0.5, sy:2.2, sz:0.5, m:'post', c:1,o:1,p:1 },
+    { x:7.5, y:1.1, z:21, sx:0.5, sy:2.2, sz:0.5, m:'post', c:1,o:1,p:1 },
+  ],
+
+  zones: [
+    { label:'GATE',  req:'anpr',    minX:4.5,  maxX:7.5,  minZ:17.5, maxZ:20.5, color:0xffa54d, zone:'out', floorY:-0.03 },
+    { label:'STORE', req:'thermal', minX:6.5,  maxX:9.5,  minZ:-6.5, maxZ:-3.5, color:0xff5e8a, zone:'in',  floorY:0.03 },
+    { label:'FUEL',  req:'thermal', minX:14.5, maxX:17.5, minZ:-2.0, maxZ:2.0,  color:0xff5e8a, zone:'out', floorY:-0.03 },
+  ],
+
+  regions: [
+    { zone:'in',  minX:-11.5, maxX:11.51, minZ:-7.5, maxZ:7.51, step:1 },
+    { zone:'out', minX:-22,   maxX:22.01, minZ:-20,  maxZ:20.01, step:1.5,
+      exclude:[ { minX:-12.5, maxX:12.5, minZ:-8.5, maxZ:8.5 } ] },
+  ],
+};
+
+const LEVELS = [LEVEL_1, LEVEL_2];
+const SITE = (parseInt(new URLSearchParams(location.search).get('site'), 10) === 1) ? 1 : 0;
+const LEVEL = LEVELS[SITE];
 
 /* ---------------- catalogue ---------------- */
 
@@ -620,7 +694,6 @@ const colliders     = [];
 const occluders     = [];
 const placeSurfaces = [];
 let roofMesh = null;
-const SITE = 0;   // selected site index; site-specific dressing is gated on this
 
 function addBox(cx, cy, cz, sx, sy, sz, mat, opt = {}) {
   const m = new THREE.Mesh(boxGeo, mat);
@@ -1102,6 +1175,127 @@ for (let i = 0; i < 7; i++)
   addBox(5.1 + i*0.5, 0.02, -2.5, 0.34, 0.02, 0.2, i % 2 ? matBodyB : matHazOrange, {});
 }   // ---- end site 1 dressing part B ----
 
+if (SITE === 1) dressSite2();
+
+function dressSite2() {
+  const matFence  = new THREE.MeshLambertMaterial({ color:0x8a9299 });
+  const matBrick  = new THREE.MeshLambertMaterial({ color:0x6f7378 });   // blockwork
+  const matFascia = new THREE.MeshLambertMaterial({ color:0x2a6f9e });   // blue brand
+  const matWindow = new THREE.MeshLambertMaterial({ color:0x2a3c45, transparent:true, opacity:0.55 });
+  const matMullion = new THREE.MeshLambertMaterial({ color:0x767b80 });
+  const matSign   = new THREE.MeshLambertMaterial({ color:0xf2f2ee });
+  const matFlamRed = new THREE.MeshLambertMaterial({ color:0xb5302a });
+  const matHazO   = new THREE.MeshLambertMaterial({ color:0xe07b1f });
+  const matHazY   = new THREE.MeshLambertMaterial({ color:0xe4c12a });
+  const matHazK   = new THREE.MeshLambertMaterial({ color:0x1c1c1c });
+
+  // hardstanding + roads
+  const flat = (cx, cz, sx, sz, mat, y) => addBox(cx, y, cz, sx, 0.03, sz, mat, {});
+  flat(0, 0, 30, 22, MATS.concrete, -0.055);
+  flat(0, 24, 56, 4, MATS.road, -0.05);
+  flat(6, 15, 3.6, 12.6, MATS.road, -0.05);
+  flat(-6, 12, 24, 4, MATS.road, -0.05);
+  flat(-18, 4, 5, 16, MATS.road, -0.05);
+  flat(15.5, 0, 7, 8, MATS.road, -0.05);
+  for (let x = -26; x <= 26; x += 4) addBox(x, -0.03, 24, 1.6, 0.02, 0.18, matRoadLine, {});
+  addBox(6, -0.03, 21.7, 3.2, 0.02, 0.3, matRoadLine, {});
+
+  // perimeter fence
+  const FX0 = -24, FX1 = 24, FZ0 = -20.5, FZ1 = 21, POST_H = 1.5;
+  const postGeo = new THREE.CylinderGeometry(0.06, 0.06, POST_H, 8), capGeo = new THREE.ConeGeometry(0.08, 0.12, 8);
+  const post = (x, z) => { const p = new THREE.Mesh(postGeo, matFence); p.position.set(x, POST_H/2, z); scene.add(p); const c = new THREE.Mesh(capGeo, matFence); c.position.set(x, POST_H + 0.06, z); scene.add(c); };
+  const run = (x0, z0, x1, z1) => { const len = Math.hypot(x1-x0, z1-z0), n = Math.max(1, Math.round(len/2)); for (let i=0;i<=n;i++) post(x0+(x1-x0)*i/n, z0+(z1-z0)*i/n); const cx=(x0+x1)/2, cz=(z0+z1)/2, h=Math.abs(x1-x0)>Math.abs(z1-z0); const sx=h?len:0.07, sz=h?0.07:len; for (const ry of [0.5,1.2]) addBox(cx, ry, cz, sx, 0.05, sz, matFence, { collide:1 }); };
+  run(FX0, FZ0, FX1, FZ0); run(FX0, FZ0, FX0, FZ1); run(FX1, FZ0, FX1, FZ1);
+  run(FX0, FZ1, -1, FZ1); run(1, FZ1, 4.5, FZ1); run(7.5, FZ1, FX1, FZ1);   // south: pedestrian + vehicle gaps
+
+  // vehicle gate
+  for (const px of [4.5, 7.5]) {
+    addBox(px, 2.26, FZ1, 0.6, 0.12, 0.6, matFence, {});
+    addBox(px, 0.35, FZ1 + 0.26, 0.52, 0.5, 0.02, matHazY, {});
+    for (let i=0;i<3;i++) addBox(px - 0.16 + i*0.16, 0.35, FZ1 + 0.272, 0.06, 0.5, 0.02, matHazK, {});
+  }
+  (function(cx, cz, w) {
+    const top=1.7, bot=0.35, h=top-bot, cy=(top+bot)/2;
+    addBox(cx, top, cz, w, 0.08, 0.08, matFence, {}); addBox(cx, bot, cz, w, 0.08, 0.08, matFence, {});
+    addBox(cx-w/2, cy, cz, 0.08, h, 0.08, matFence, {}); addBox(cx+w/2, cy, cz, 0.08, h, 0.08, matFence, {});
+    const bars=Math.round(w/0.26), bg=new THREE.CylinderGeometry(0.022,0.022,h,6);
+    for (let i=1;i<bars;i++){ const b=new THREE.Mesh(bg,matFence); b.position.set(cx-w/2+w*i/bars, cy, cz); scene.add(b); }
+    const br=new THREE.Mesh(boxGeo,matFence); br.scale.set(Math.hypot(w,h),0.06,0.05); br.position.set(cx,cy,cz); br.rotation.z=Math.atan2(h,w); scene.add(br);
+    addBox(cx, bot-0.32, cz, w+0.4, 0.04, 0.12, matRoadLine, {});
+  })(10, FZ1, 3.6);
+  { const px=3.4, pz=20.6; addBox(px,0.95,pz,0.06,1.9,0.06,matFence,{}); addBox(px,1.75,pz,0.5,0.4,0.04,matFascia,{}); addBox(px,1.86,pz+0.03,0.16,0.1,0.05,matBodyB,{}); addBox(px+0.1,1.86,pz+0.05,0.06,0.06,0.05,matBodyB,{}); }
+
+  // cladding
+  const cladH = (cx, z, len) => { addBox(cx,0.55,z,len,1.1,0.06,matBrick,{}); addBox(cx,2.7,z,len,0.34,0.06,matFascia,{}); };
+  const cladV = (x, cz, len) => { addBox(x,0.55,cz,0.06,1.1,len,matBrick,{}); addBox(x,2.7,cz,0.06,0.34,len,matFascia,{}); };
+  cladH(0, -8.18, 24.6);
+  cladH(-6.5, 8.18, 11); cladH(6.5, 8.18, 11);
+  cladV(-12.18, 0, 16.6);
+  cladV(12.18, -5, 6); cladV(12.18, 5, 6);
+
+  // south entrance
+  (function() {
+    const z = 8.24;
+    const win = (cx, w) => { const y0=1.15,y1=2.45,h=y1-y0,cy=(y0+y1)/2; const g=new THREE.Mesh(boxGeo,matWindow); g.scale.set(w,h,0.04); g.position.set(cx,cy,z); scene.add(g); const fr=(fx,fy,sx,sy)=>{const m=new THREE.Mesh(boxGeo,matMullion);m.scale.set(sx,sy,0.06);m.position.set(fx,fy,z+0.01);scene.add(m);}; fr(cx,y0,w+0.08,0.08); fr(cx,y1,w+0.08,0.08); fr(cx-w/2,cy,0.08,h); fr(cx+w/2,cy,0.08,h); fr(cx,cy,0.06,h); fr(cx,cy,w,0.06); };
+    win(-3, 2.2); win(3, 2.2);
+    const dz=8.08; const g=new THREE.Mesh(boxGeo,matWindow); g.scale.set(1.8,2.1,0.04); g.position.set(0,1.05,dz); scene.add(g);
+    const fr=(fx,fy,sx,sy)=>{const m=new THREE.Mesh(boxGeo,matMullion);m.scale.set(sx,sy,0.07);m.position.set(fx,fy,dz+0.01);scene.add(m);};
+    fr(0,2.1,2.0,0.1); fr(-1,1.05,0.1,2.1); fr(1,1.05,0.1,2.1); fr(0,1.05,0.08,2.1);
+    addBox(0,2.48,7.65,2.8,0.1,0.9,matMullion,{});
+    addBox(0,2.78,8.22,2.6,0.46,0.05,matSign,{}); addBox(0,2.55,8.23,2.6,0.04,0.04,matFascia,{});
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(0.13,0.035,8,18),matFascia); ring.position.set(-1.0,2.82,8.26); scene.add(ring);
+    const dot=new THREE.Mesh(new THREE.SphereGeometry(0.05,8,6),matFascia); dot.position.set(-1.0,2.82,8.27); scene.add(dot);
+  })();
+
+  // loading bay: roller shutter in the east gap + canopy outside
+  for (let i=0;i<7;i++) addBox(12.0, 0.3+i*0.34, 0, 0.12, 0.3, 3.9, matMullion, {});
+  addBox(14.3, 2.7, 0, 4.6, 0.12, 5.0, matFascia, {});
+  for (const cz of [-2.2, 2.2]) addBox(16.4, 1.35, cz, 0.12, 2.7, 0.12, matMullion, { collide:1 });
+
+  // fuel compound dressing
+  (function() {
+    const sxp=16, szp=2.7;
+    addBox(sxp,0.95,szp,0.06,1.9,0.06,matFence,{});
+    addBox(sxp,1.75,szp,0.5,0.5,0.04,matHazO,{});
+    const f=new THREE.Mesh(boxGeo,matBodyB); f.scale.set(0.03,0.28,0.07); f.position.set(sxp,1.78,szp-0.03); f.rotation.x=0.5; scene.add(f);
+    for (const [bx,bz,sx,sz] of [[16,-2.3,3.2,0.16],[16,2.3,3.2,0.16],[14.3,0,0.16,4.6],[17.7,0,0.16,4.6]]) addBox(bx,0.12,bz,sx,0.24,sz,matHazY,{});
+  })();
+
+  // chemical store dressing (around the crate at x8, z-5)
+  (function() {
+    const cylGeo=new THREE.CylinderGeometry(0.16,0.16,0.8,12), capGeo2=new THREE.CylinderGeometry(0.07,0.1,0.18,8);
+    for (const [cx,cz] of [[8.8,-5.3],[9.0,-4.9],[8.7,-4.55]]) { const b=new THREE.Mesh(cylGeo,matFlamRed); b.position.set(cx,0.4,cz); scene.add(b); const c=new THREE.Mesh(capGeo2,matBodyB); c.position.set(cx,0.89,cz); scene.add(c); }
+    addBox(7,0.22,-5.1,0.34,0.44,0.2,matFlamRed,{collide:1}); addBox(7,0.47,-5.18,0.06,0.12,0.06,matBodyB,{});
+    for (let i=0;i<7;i++) addBox(6.6+i*0.5, 0.02, -3.5, 0.34, 0.02, 0.2, i%2?matBodyB:matHazO, {});
+  })();
+
+  // scenery: cars, lamps, trees
+  const car = (cx, cz, color) => {
+    const body=new THREE.MeshLambertMaterial({color});
+    addBox(cx,0.38,cz,4.0,0.42,1.8,body,{collide:1,occlude:1});
+    addBox(cx,0.72,cz,3.5,0.34,1.68,body,{occlude:1});
+    addBox(cx+0.25,1.06,cz,1.95,0.5,1.5,body,{occlude:1});
+    const gy=1.04,gh=0.32,gl=new THREE.MeshLambertMaterial({color:0x223540});
+    addBox(cx-0.7,gy,cz,0.06,gh,1.25,gl,{}); addBox(cx+1.2,gy,cz,0.06,gh,1.1,gl,{});
+    for (const gz of [-0.76,0.76]) addBox(cx+0.25,gy,cz+gz,1.4,gh,0.06,gl,{});
+    const wg=new THREE.CylinderGeometry(0.34,0.34,0.22,12); wg.rotateX(Math.PI/2);
+    for (const wx of [-1.3,1.3]) for (const wz of [-0.92,0.92]) { const w=new THREE.Mesh(wg,matBodyB); w.position.set(cx+wx,0.34,cz+wz); scene.add(w); }
+  };
+  car(-18, 0, 0x9aa4ad); car(-18, 4, 0x6e4b3a);
+  const matLineW=new THREE.MeshLambertMaterial({color:0xd9d6cc});
+  for (const lz of [-2.1, 2, 6.1]) addBox(-18, -0.03, lz, 4.6, 0.02, 0.12, matLineW, {});
+
+  const lampPole=new THREE.MeshLambertMaterial({color:0x3d4349}), lampHead=new THREE.MeshLambertMaterial({color:0x2a2e31}), lampGlow=new THREE.MeshBasicMaterial({color:0xfdf0c0});
+  const lampShaft=new THREE.CylinderGeometry(0.07,0.1,4.2,10);
+  const lamp = (x,z,dx,dz) => { const ang=Math.atan2(dx,dz); addBox(x,0.16,z,0.42,0.32,0.42,lampPole,{collide:1}); const s=new THREE.Mesh(lampShaft,lampPole); s.position.set(x,2.3,z); scene.add(s); const len=1.1; const a=new THREE.Mesh(boxGeo,lampPole); a.scale.set(0.08,0.08,len); a.position.set(x+dx*len/2,4.3,z+dz*len/2); a.rotation.y=ang; scene.add(a); const hx=x+dx*len,hz=z+dz*len; const hd=new THREE.Mesh(boxGeo,lampHead); hd.scale.set(0.5,0.16,0.34); hd.position.set(hx,4.22,hz); hd.rotation.y=ang; scene.add(hd); const gl=new THREE.Mesh(boxGeo,lampGlow); gl.scale.set(0.4,0.04,0.26); gl.position.set(hx,4.13,hz); gl.rotation.y=ang; scene.add(gl); };
+  lamp(-22,18,0.7,-0.7); lamp(22,18,-0.7,-0.7); lamp(22,-18,-0.7,0.7); lamp(-22,-18,0.7,0.7); lamp(0,19,0,-1);
+
+  const trunkM=new THREE.MeshLambertMaterial({color:0x5a4632}), leafA=new THREE.MeshLambertMaterial({color:0x4a7340}), leafB=new THREE.MeshLambertMaterial({color:0x3e6336});
+  const trunkGeo=new THREE.CylinderGeometry(0.13,0.19,1.6,8), canopyGeo=new THREE.SphereGeometry(1,10,8);
+  const tree = (x,z,s) => { const tr=new THREE.Mesh(trunkGeo,trunkM); tr.scale.set(s,s,s); tr.position.set(x,0.8*s,z); scene.add(tr); for (const [m,r,ox,oy,oz] of [[leafA,0.95,0,1.8,0],[leafB,0.72,0.45,2.3,-0.25],[leafA,0.62,-0.35,2.4,0.35]]) { const c=new THREE.Mesh(canopyGeo,m); c.scale.setScalar(r*s); c.position.set(x+ox*s,oy*s,z+oz*s); scene.add(c); } };
+  tree(-22,-12,1.1); tree(-22,8,1.0); tree(-22,16,1.2); tree(-8,-19,1.0); tree(8,-19,1.1); tree(22,10,1.0);
+}
+
 /* ---------------- player / global state ---------------- */
 
 const player = { x:LEVEL.spawn.x, z:LEVEL.spawn.z, yaw:LEVEL.spawn.yaw, pitch:0, y:0, vy:0, onGround:true };
@@ -1169,6 +1363,15 @@ function updateVertical(dt) {
 
 const overlay = document.getElementById('overlay');
 overlay.addEventListener('click', lockPointer);
+
+// site picker: reloads with ?site=N (avoids a live rebuild)
+document.querySelectorAll('#sitePick .siteBtn').forEach(btn => {
+  if (+btn.dataset.site === SITE) btn.classList.add('cur');
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (+btn.dataset.site !== SITE) location.search = '?site=' + btn.dataset.site;
+  });
+});
 
 function showResumeOverlay() {
   if (!locked && !uiOpen && mode !== 'feed') overlay.style.display = 'flex';
@@ -2345,13 +2548,13 @@ document.addEventListener('mousedown', e => {
 
 document.getElementById('covTarget').textContent = '/ TARGET ' + LEVEL.target + '%';
 document.getElementById('siteName').textContent = LEVEL.name;
+const zoneReqs = LEVEL.zones.map(z => z.label + ' needs ' + z.req.toUpperCase()).join(', ');
 document.getElementById('overlayBrief').innerHTML =
   'Site: ' + LEVEL.name + '. <b>Install:</b> reach ' + LEVEL.target + '% coverage within the ' +
-  '&pound;' + LEVEL.budget.toLocaleString('en-GB') + ' budget; the gate needs ANPR, the refuse ' +
-  'store and flammable goods area need thermal; wall mounts 2m+. <b>Commission:</b> place your ' +
-  'laptop, lodge the signalling schedule on the ARC portal (the router has the connection details), ' +
-  'then enter the SMTP settings on the NVR and wait out provisioning. <b>Walk test:</b> phone the ' +
-  'ARC and activate each signalling camera on request.';
+  '&pound;' + LEVEL.budget.toLocaleString('en-GB') + ' budget; ' + zoneReqs + '; wall mounts 2m+. ' +
+  '<b>Commission:</b> place your laptop, lodge the signalling schedule on the ARC portal (the router ' +
+  'has the connection details), then enter the SMTP settings on the NVR and wait out provisioning. ' +
+  '<b>Walk test:</b> arm the NVR, phone the ARC and activate each signalling camera, then disarm to finish.';
 
 /* ---------------- dev menu ---------------- */
 
