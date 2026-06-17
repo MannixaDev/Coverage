@@ -383,7 +383,7 @@
     <div class="sitePick" id="sitePick">
       <span class="sl">SITE</span>
       <button class="siteBtn" data-site="0">UNIT 1</button>
-      <button class="siteBtn" data-site="1">UNIT 7</button>
+      <button class="siteBtn" data-site="1">SHOWROOM</button>
     </div>
     <div class="brief" id="overlayBrief"></div>
     <div class="ctl">
@@ -435,7 +435,7 @@ const shuffle = a => { for (let i=a.length-1; i>0; i--){ const j=Math.floor(Math
    ========================================================= */
 
 const Sound = (() => {
-  let ctx = null, master = null, muted = false, ambient = null;
+  let ctx = null, master = null, muted = false;
   function ensure() {
     if (!ctx) {
       const AC = window.AudioContext || window.webkitAudioContext;
@@ -447,13 +447,6 @@ const Sound = (() => {
     }
     if (ctx.state === 'suspended') ctx.resume();
     return ctx;
-  }
-  function startAmbient() {
-    if (ambient || !ctx) return;
-    ambient = ctx.createGain(); ambient.gain.value = 0.05; ambient.connect(master);
-    for (const f of [55, 58.7]) { const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f; o.connect(ambient); o.start(); }
-    const o2 = ctx.createOscillator(); o2.type = 'triangle'; o2.frequency.value = 110;
-    const g2 = ctx.createGain(); g2.gain.value = 0.012; o2.connect(g2); g2.connect(ambient); o2.start();
   }
   function tone(freq, t0, dur, type, peak) {
     const o = ctx.createOscillator(), g = ctx.createGain();
@@ -471,7 +464,7 @@ const Sound = (() => {
     for (const [f, d, delay, type, peak] of notes) tone(f, base + (delay||0), d, type, peak || 0.25);
   }
   return {
-    resume()     { ensure(); startAmbient(); },
+    resume()     { ensure(); },
     toggleMute() { muted = !muted; if (master) master.gain.value = muted ? 0 : 0.45; return muted; },
     isMuted: ()  => muted,
     ring()     { if (!ensure() || muted) return; const t = ctx.currentTime; for (const s of [0, 0.42]) { tone(420, t+s, 0.32, 'sine', 0.16); tone(470, t+s, 0.32, 'sine', 0.1); } },
@@ -546,7 +539,7 @@ const LEVEL_1 = {
 // Site 2: a larger warehouse (24 x 16 m) with a NW office, an east loading bay,
 // and a fuel compound. Office orientation mirrors site 1 so shared equipment fits.
 const LEVEL_2 = {
-  name: 'UNIT 7',
+  name: 'PRESTIGE MOTORS',
   budget: 5000,
   target: 80,
   spawn: { x:-2, z:11, yaw:0 },
@@ -589,7 +582,7 @@ const LEVEL_2 = {
 
   zones: [
     { label:'GATE',  req:'anpr',    minX:4.5,  maxX:7.5,  minZ:17.5, maxZ:20.5, color:0xffa54d, zone:'out', floorY:-0.03 },
-    { label:'STORE', req:'thermal', minX:6.5,  maxX:9.5,  minZ:-6.5, maxZ:-3.5, color:0xff5e8a, zone:'in',  floorY:0.03 },
+    { label:'PAINT', req:'thermal', minX:6.5,  maxX:9.5,  minZ:-6.5, maxZ:-3.5, color:0xff5e8a, zone:'in',  floorY:0.03 },
     { label:'FUEL',  req:'thermal', minX:14.5, maxX:17.5, minZ:-2.0, maxZ:2.0,  color:0xff5e8a, zone:'out', floorY:-0.03 },
   ],
 
@@ -1179,8 +1172,11 @@ if (SITE === 1) dressSite2();
 
 function dressSite2() {
   const matFence  = new THREE.MeshLambertMaterial({ color:0x8a9299 });
-  const matBrick  = new THREE.MeshLambertMaterial({ color:0x6f7378 });   // blockwork
-  const matFascia = new THREE.MeshLambertMaterial({ color:0x2a6f9e });   // blue brand
+  const matBrick  = new THREE.MeshLambertMaterial({ color:0xd2d5d8 });   // light cladding panel (showroom)
+  const matFascia = new THREE.MeshLambertMaterial({ color:0x123a6b });   // deep blue dealership brand
+  const matGlass2 = new THREE.MeshLambertMaterial({ color:0x9fc4d8, transparent:true, opacity:0.4, depthWrite:false });
+  const matMull   = new THREE.MeshLambertMaterial({ color:0xb8bcc0 });   // silver curtain-wall framing
+  const matShowFloor = new THREE.MeshLambertMaterial({ color:0xe8eaec }); // polished showroom floor
   const matWindow = new THREE.MeshLambertMaterial({ color:0x2a3c45, transparent:true, opacity:0.55 });
   const matMullion = new THREE.MeshLambertMaterial({ color:0x767b80 });
   const matSign   = new THREE.MeshLambertMaterial({ color:0xf2f2ee });
@@ -1225,19 +1221,27 @@ function dressSite2() {
   })(10, FZ1, 3.6);
   { const px=3.4, pz=20.6; addBox(px,0.95,pz,0.06,1.9,0.06,matFence,{}); addBox(px,1.75,pz,0.5,0.4,0.04,matFascia,{}); addBox(px,1.86,pz+0.03,0.16,0.1,0.05,matBodyB,{}); addBox(px+0.1,1.86,pz+0.05,0.06,0.06,0.05,matBodyB,{}); }
 
-  // cladding
+  // glazed showroom frontage (south), light cladding on the back and sides
   const cladH = (cx, z, len) => { addBox(cx,0.55,z,len,1.1,0.06,matBrick,{}); addBox(cx,2.7,z,len,0.34,0.06,matFascia,{}); };
   const cladV = (x, cz, len) => { addBox(x,0.55,cz,0.06,1.1,len,matBrick,{}); addBox(x,2.7,cz,0.06,0.34,len,matFascia,{}); };
-  cladH(0, -8.18, 24.6);
-  cladH(-6.5, 8.18, 11); cladH(6.5, 8.18, 11);
-  cladV(-12.18, 0, 16.6);
-  cladV(12.18, -5, 6); cladV(12.18, 5, 6);
+  const glazeH = (cx, z, len) => {
+    const y0=0.2, y1=2.85, h=y1-y0, cy=(y0+y1)/2;
+    const g=new THREE.Mesh(boxGeo,matGlass2); g.scale.set(len,h,0.05); g.position.set(cx,cy,z); scene.add(g);
+    const fr=(fx,fy,sx,sy)=>{const m=new THREE.Mesh(boxGeo,matMull);m.scale.set(sx,sy,0.08);m.position.set(fx,fy,z+0.012);scene.add(m);};
+    fr(cx,y0,len,0.08); fr(cx,y1,len,0.08); fr(cx,1.55,len,0.06);
+    const n=Math.max(2,Math.round(len/1.6));
+    for (let i=0;i<=n;i++) fr(cx-len/2+len*i/n, cy, 0.06, h);
+  };
+  glazeH(-6.5, 8.2, 11); glazeH(6.5, 8.2, 11);     // south curtain wall (entrance gap x -1..1)
+  addBox(0, 3.0, 8.2, 24.6, 0.32, 0.12, matFascia, {});   // brand fascia band above the glazing
+  cladH(0, -8.18, 24.6);                            // north (back)
+  cladV(-12.18, 0, 16.6);                           // west
+  cladV(12.18, -5, 6); cladV(12.18, 5, 6);          // east (around loading bay)
+  // polished showroom floor over the front half
+  addBox(0, 0.02, 4, 23.6, 0.02, 7.6, matShowFloor, {});
 
   // south entrance
   (function() {
-    const z = 8.24;
-    const win = (cx, w) => { const y0=1.15,y1=2.45,h=y1-y0,cy=(y0+y1)/2; const g=new THREE.Mesh(boxGeo,matWindow); g.scale.set(w,h,0.04); g.position.set(cx,cy,z); scene.add(g); const fr=(fx,fy,sx,sy)=>{const m=new THREE.Mesh(boxGeo,matMullion);m.scale.set(sx,sy,0.06);m.position.set(fx,fy,z+0.01);scene.add(m);}; fr(cx,y0,w+0.08,0.08); fr(cx,y1,w+0.08,0.08); fr(cx-w/2,cy,0.08,h); fr(cx+w/2,cy,0.08,h); fr(cx,cy,0.06,h); fr(cx,cy,w,0.06); };
-    win(-3, 2.2); win(3, 2.2);
     const dz=8.08; const g=new THREE.Mesh(boxGeo,matWindow); g.scale.set(1.8,2.1,0.04); g.position.set(0,1.05,dz); scene.add(g);
     const fr=(fx,fy,sx,sy)=>{const m=new THREE.Mesh(boxGeo,matMullion);m.scale.set(sx,sy,0.07);m.position.set(fx,fy,dz+0.01);scene.add(m);};
     fr(0,2.1,2.0,0.1); fr(-1,1.05,0.1,2.1); fr(1,1.05,0.1,2.1); fr(0,1.05,0.08,2.1);
@@ -1269,21 +1273,31 @@ function dressSite2() {
     for (let i=0;i<7;i++) addBox(6.6+i*0.5, 0.02, -3.5, 0.34, 0.02, 0.2, i%2?matBodyB:matHazO, {});
   })();
 
-  // scenery: cars, lamps, trees
-  const car = (cx, cz, color) => {
+  // scenery: cars, lamps, trees. occ=false for display cars (don't block coverage)
+  const car = (cx, cz, color, occ = true) => {
     const body=new THREE.MeshLambertMaterial({color});
-    addBox(cx,0.38,cz,4.0,0.42,1.8,body,{collide:1,occlude:1});
-    addBox(cx,0.72,cz,3.5,0.34,1.68,body,{occlude:1});
-    addBox(cx+0.25,1.06,cz,1.95,0.5,1.5,body,{occlude:1});
+    const o = occ ? 1 : 0;
+    addBox(cx,0.38,cz,4.0,0.42,1.8,body,{collide:1,occlude:o});
+    addBox(cx,0.72,cz,3.5,0.34,1.68,body,{occlude:o});
+    addBox(cx+0.25,1.06,cz,1.95,0.5,1.5,body,{occlude:o});
     const gy=1.04,gh=0.32,gl=new THREE.MeshLambertMaterial({color:0x223540});
     addBox(cx-0.7,gy,cz,0.06,gh,1.25,gl,{}); addBox(cx+1.2,gy,cz,0.06,gh,1.1,gl,{});
     for (const gz of [-0.76,0.76]) addBox(cx+0.25,gy,cz+gz,1.4,gh,0.06,gl,{});
     const wg=new THREE.CylinderGeometry(0.34,0.34,0.22,12); wg.rotateX(Math.PI/2);
     for (const wx of [-1.3,1.3]) for (const wz of [-0.92,0.92]) { const w=new THREE.Mesh(wg,matBodyB); w.position.set(cx+wx,0.34,cz+wz); scene.add(w); }
   };
-  car(-18, 0, 0x9aa4ad); car(-18, 4, 0x6e4b3a);
+  car(-18, 0, 0x9aa4ad); car(-18, 4, 0x6e4b3a);   // staff car park (occluders)
+  // showroom display cars on the polished floor (non-occluding)
+  car(-5, 4, 0x3a6ea5, false); car(5, 4, 0xb5302a, false); car(0, 6.4, 0x101216, false);
+  // forecourt display cars (non-occluding)
+  car(-9, 10, 0xdedfe2, false); car(-3.5, 10, 0x6e4b3a, false);
   const matLineW=new THREE.MeshLambertMaterial({color:0xd9d6cc});
   for (const lz of [-2.1, 2, 6.1]) addBox(-18, -0.03, lz, 4.6, 0.02, 0.12, matLineW, {});
+  // totem pylon sign on the forecourt
+  addBox(-11, 1.6, 13, 0.2, 3.2, 0.2, matMull, { collide:1 });
+  addBox(-11, 3.4, 13, 1.4, 1.0, 0.18, matFascia, {});
+  addBox(-11, 3.4, 13.1, 1.2, 0.8, 0.04, matSign, {});
+  { const tr=new THREE.Mesh(new THREE.TorusGeometry(0.22,0.05,8,20),matFascia); tr.position.set(-11,3.4,13.16); scene.add(tr); }
 
   const lampPole=new THREE.MeshLambertMaterial({color:0x3d4349}), lampHead=new THREE.MeshLambertMaterial({color:0x2a2e31}), lampGlow=new THREE.MeshBasicMaterial({color:0xfdf0c0});
   const lampShaft=new THREE.CylinderGeometry(0.07,0.1,4.2,10);
@@ -2641,28 +2655,53 @@ function devAutoInstall() {
   while (placed.length) { const c = placed.pop(); camsRoot.remove(c.body); fovRoot.remove(c.cone); }
   spent = 0; camCounter = 0;
   devNoBudget = true;   // the test set ignores cost
-  // interior: ceiling cameras per room
+  if (SITE === 1) devInstall2(); else devInstall1();
+  markDirty();
+  recompute();
+  renderDevMenu();
+}
+
+function devInstall1() {
+  const T = 0.14;
   devPlaceCam('fisheye', [-3, 2.95, 1], [0, -1, 0]);
   devPlaceCam('fisheye', [5,  2.95, 0], [0, -1, 0]);
   devPlaceCam('dome',    [-7, 2.9, -4], [0, -1, 0]);            // server room
-  // required-type cameras at the three zones
-  devPlaceCam('thermal', [6.5, 2.9, -4], [0, -1, 0]);          // STORE (ceiling, straight down)
-  devPlaceCam('thermal', [9.35, 2.9, 0], [1, -0.7, 0]);        // REFUSE (east wall, over the bins)
-  devPlaceCam('anpr',    [5, 2.6, 6.35], [0, -0.18, 0.98]);    // GATE (south wall, toward the drive)
-  // exterior coverage around the building, aimed out with a slight downward tilt
-  const T = 0.14;
-  for (const x of [-8, -4, 0, 4, 8]) devPlaceCam('turret', [x, 2.8, -6.35], [0, -T, -1]);   // north
-  for (const x of [-8, -6, 3, 7])    devPlaceCam('turret', [x, 2.8, 6.35],  [0, -T, 1]);    // south (skips door)
-  for (const z of [-5, -2, 3, 5])    devPlaceCam('turret', [9.35, 2.8, z],  [1, -T, 0]);    // east
-  for (const z of [-5, -1.5, 2, 5])  devPlaceCam('turret', [-9.35, 2.8, z], [-1, -T, 0]);   // west
-  // corners with longer-range bullets
+  devPlaceCam('thermal', [6.5, 2.9, -4], [0, -1, 0]);          // STORE
+  devPlaceCam('thermal', [9.35, 2.9, 0], [1, -0.7, 0]);        // REFUSE
+  devPlaceCam('anpr',    [5, 2.6, 6.35], [0, -0.18, 0.98]);    // GATE
+  for (const x of [-8, -4, 0, 4, 8]) devPlaceCam('turret', [x, 2.8, -6.35], [0, -T, -1]);
+  for (const x of [-8, -6, 3, 7])    devPlaceCam('turret', [x, 2.8, 6.35],  [0, -T, 1]);
+  for (const z of [-5, -2, 3, 5])    devPlaceCam('turret', [9.35, 2.8, z],  [1, -T, 0]);
+  for (const z of [-5, -1.5, 2, 5])  devPlaceCam('turret', [-9.35, 2.8, z], [-1, -T, 0]);
   devPlaceCam('bullet', [9, 2.8, -6.35],  [1, -T, -1]);
   devPlaceCam('bullet', [-9, 2.8, -6.35], [-1, -T, -1]);
   devPlaceCam('bullet', [9, 2.8, 6.35],   [1, -T, 1]);
   devPlaceCam('bullet', [-9, 2.8, 6.35],  [-1, -T, 1]);
-  markDirty();
-  recompute();
-  renderDevMenu();
+}
+
+function devInstall2() {
+  const T = 0.14;
+  // interior ceiling cameras (24x16 building, partition at z0, NW office)
+  devPlaceCam('fisheye', [-2, 2.95, -4], [0, -1, 0]);
+  devPlaceCam('fisheye', [7,  2.95, -4], [0, -1, 0]);
+  devPlaceCam('fisheye', [-6, 2.95, 4],  [0, -1, 0]);
+  devPlaceCam('fisheye', [6,  2.95, 4],  [0, -1, 0]);
+  devPlaceCam('dome',    [-9.5, 2.9, -5], [0, -1, 0]);          // office
+  // required-type cameras
+  devPlaceCam('thermal', [8, 2.9, -5], [0, -1, 0]);            // STORE (ceiling)
+  devPlaceCam('thermal', [12.2, 2.6, 2], [4, -1.6, -2]);       // FUEL (east wall, toward the compound)
+  devPlaceCam('anpr',    [6, 2.6, 8.2], [0, -0.15, 1]);        // GATE (south wall, toward the drive)
+  // exterior turrets around the building
+  for (const x of [-10, -6, -2, 2, 6, 10]) devPlaceCam('turret', [x, 2.8, -8.35], [0, -T, -1]);   // north
+  for (const x of [-10, -6, -3, 3, 6, 10]) devPlaceCam('turret', [x, 2.8, 8.35],  [0, -T, 1]);    // south
+  for (const z of [-6, -4, 4, 6])          devPlaceCam('turret', [12.35, 2.8, z], [1, -T, 0]);    // east (skips loading bay)
+  for (const z of [-6, -2, 2, 6])          devPlaceCam('turret', [-12.35, 2.8, z], [-1, -T, 0]);  // west
+  // corners + the east compound apron
+  devPlaceCam('bullet', [12, 2.8, -8.35],  [1, -T, -1]);
+  devPlaceCam('bullet', [-12, 2.8, -8.35], [-1, -T, -1]);
+  devPlaceCam('bullet', [12, 2.8, 8.35],   [1, -T, 1]);
+  devPlaceCam('bullet', [-12, 2.8, 8.35],  [-1, -T, 1]);
+  devPlaceCam('bullet', [12.35, 2.8, 5],   [1, -T, 1]);
 }
 
 function devCompleteCommission() {
