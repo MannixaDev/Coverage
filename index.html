@@ -422,18 +422,25 @@ const shuffle = a => { for (let i=a.length-1; i>0; i--){ const j=Math.floor(Math
    ========================================================= */
 
 const Sound = (() => {
-  let ctx = null, master = null, muted = false;
+  let ctx = null, master = null, muted = false, ambient = null;
   function ensure() {
     if (!ctx) {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
       ctx = new AC();
       master = ctx.createGain();
-      master.gain.value = 0.45;
+      master.gain.value = muted ? 0 : 0.45;
       master.connect(ctx.destination);
     }
     if (ctx.state === 'suspended') ctx.resume();
     return ctx;
+  }
+  function startAmbient() {
+    if (ambient || !ctx) return;
+    ambient = ctx.createGain(); ambient.gain.value = 0.05; ambient.connect(master);
+    for (const f of [55, 58.7]) { const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f; o.connect(ambient); o.start(); }
+    const o2 = ctx.createOscillator(); o2.type = 'triangle'; o2.frequency.value = 110;
+    const g2 = ctx.createGain(); g2.gain.value = 0.012; o2.connect(g2); g2.connect(ambient); o2.start();
   }
   function tone(freq, t0, dur, type, peak) {
     const o = ctx.createOscillator(), g = ctx.createGain();
@@ -451,9 +458,10 @@ const Sound = (() => {
     for (const [f, d, delay, type, peak] of notes) tone(f, base + (delay||0), d, type, peak || 0.25);
   }
   return {
-    resume()     { ensure(); },
-    toggleMute() { muted = !muted; return muted; },
+    resume()     { ensure(); startAmbient(); },
+    toggleMute() { muted = !muted; if (master) master.gain.value = muted ? 0 : 0.45; return muted; },
     isMuted: ()  => muted,
+    ring()     { if (!ensure() || muted) return; const t = ctx.currentTime; for (const s of [0, 0.42]) { tone(420, t+s, 0.32, 'sine', 0.16); tone(470, t+s, 0.32, 'sine', 0.1); } },
     place()    { play([[880, 0.06, 0, 'square', 0.2]]); },
     remove()   { play([[200, 0.12, 0, 'sawtooth', 0.18]]); },
     invalid()  { play([[160, 0.14, 0, 'square', 0.16], [120, 0.16, 0.09, 'square', 0.16]]); },
@@ -1111,6 +1119,7 @@ let nvrConnected = false;
 let nvrArmed = false;   // disarmed by default; must be armed for the walk test, disarmed to finish
 let provisionRemaining = 0, packIssued = false;
 let walkDone = false;
+let ringTimer = 1;   // gentle phone ring prompt when the site is ready to call
 let call = null;                // {order:[], idx, progress, lines:[]}
 let camCounter = 0;
 
@@ -2509,6 +2518,8 @@ function animate() {
       }
     }
     if (call) updateCall(dt);
+    if (phoneReady()) { ringTimer -= dt; if (ringTimer <= 0) { Sound.ring(); ringTimer = 5; } }
+    else ringTimer = 1;
     updatePhone();
     updateObjective(!vanMode && !uiOpen);
     renderer.render(scene, camera);
