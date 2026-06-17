@@ -1156,10 +1156,15 @@ function updateVertical(dt) {
 const overlay = document.getElementById('overlay');
 overlay.addEventListener('click', lockPointer);
 
+function showResumeOverlay() {
+  if (!locked && !uiOpen && mode !== 'feed') overlay.style.display = 'flex';
+}
+
 function lockPointer() {
   Sound.resume();
   const p = renderer.domElement.requestPointerLock();
-  if (p && p.catch) p.catch(() => {});
+  // a re-lock during the browser's post-exit cooldown rejects: fall back to the resume overlay
+  if (p && p.catch) p.catch(() => showResumeOverlay());
 }
 
 document.addEventListener('pointerlockchange', () => {
@@ -1167,6 +1172,8 @@ document.addEventListener('pointerlockchange', () => {
   // feed view stays up even without pointer lock (its controls are keys only)
   overlay.style.display = (locked || uiOpen || mode === 'feed') ? 'none' : 'flex';
 });
+// some browsers report a failed lock here rather than rejecting the promise
+document.addEventListener('pointerlockerror', showResumeOverlay);
 
 document.addEventListener('mousemove', e => {
   if (!locked || mode !== 'fp' || vanMode) return;
