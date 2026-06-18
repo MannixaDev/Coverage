@@ -1287,17 +1287,17 @@ function dressSite2() {
     for (const wx of [-1.3,1.3]) for (const wz of [-0.92,0.92]) { const w=new THREE.Mesh(wg,matBodyB); w.position.set(cx+wx,0.34,cz+wz); scene.add(w); }
   };
   car(-18, 0, 0x9aa4ad); car(-18, 4, 0x6e4b3a);   // staff car park (occluders)
-  // showroom display cars on the polished floor (non-occluding)
-  car(-5, 4, 0x3a6ea5, false); car(5, 4, 0xb5302a, false); car(0, 6.4, 0x101216, false);
-  // forecourt display cars (non-occluding)
-  car(-9, 10, 0xdedfe2, false); car(-3.5, 10, 0x6e4b3a, false);
+  // showroom display cars on the polished floor (non-occluding), clear of the x -1..1 entrance corridor
+  car(-6, 4, 0x3a6ea5, false); car(6, 4, 0xb5302a, false); car(-6, 6.8, 0x101216, false);
+  // forecourt display cars (non-occluding), to the west of the entrance
+  car(-8, 10, 0xdedfe2, false); car(-8, 13, 0x6e4b3a, false);
   const matLineW=new THREE.MeshLambertMaterial({color:0xd9d6cc});
   for (const lz of [-2.1, 2, 6.1]) addBox(-18, -0.03, lz, 4.6, 0.02, 0.12, matLineW, {});
-  // totem pylon sign on the forecourt
-  addBox(-11, 1.6, 13, 0.2, 3.2, 0.2, matMull, { collide:1 });
-  addBox(-11, 3.4, 13, 1.4, 1.0, 0.18, matFascia, {});
-  addBox(-11, 3.4, 13.1, 1.2, 0.8, 0.04, matSign, {});
-  { const tr=new THREE.Mesh(new THREE.TorusGeometry(0.22,0.05,8,20),matFascia); tr.position.set(-11,3.4,13.16); scene.add(tr); }
+  // totem pylon sign on the forecourt corner
+  addBox(-12, 1.6, 15, 0.2, 3.2, 0.2, matMull, { collide:1 });
+  addBox(-12, 3.4, 15, 1.4, 1.0, 0.18, matFascia, {});
+  addBox(-12, 3.4, 15.1, 1.2, 0.8, 0.04, matSign, {});
+  { const tr=new THREE.Mesh(new THREE.TorusGeometry(0.22,0.05,8,20),matFascia); tr.position.set(-12,3.4,15.16); scene.add(tr); }
 
   const lampPole=new THREE.MeshLambertMaterial({color:0x3d4349}), lampHead=new THREE.MeshLambertMaterial({color:0x2a2e31}), lampGlow=new THREE.MeshBasicMaterial({color:0xfdf0c0});
   const lampShaft=new THREE.CylinderGeometry(0.07,0.1,4.2,10);
