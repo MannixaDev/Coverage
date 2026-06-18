@@ -1046,7 +1046,14 @@ const canopyGeo = new THREE.SphereGeometry(1, 10, 8);
 
 function makeTree(x, z, s) {
   const tr = new THREE.Mesh(trunkGeo, matTrunk); tr.scale.set(s, s, s); tr.position.set(x, 0.8*s, z); scene.add(tr);
-  const lobes = [[matLeafA, 0.95, 0, 1.8, 0], [matLeafB, 0.72, 0.45, 2.3, -0.25], [matLeafA, 0.62, -0.35, 2.4, 0.35]];
+  const lobes = [
+    [matLeafA, 1.05,  0.0,  1.95, 0.0],
+    [matLeafB, 0.9,   0.0,  2.5,  0.0],
+    [matLeafA, 0.72,  0.6,  2.1,  0.15],
+    [matLeafB, 0.7,  -0.55, 2.2, -0.2],
+    [matLeafA, 0.66,  0.15, 2.05, 0.55],
+    [matLeafB, 0.6,  -0.1,  2.85, 0.05],
+  ];
   for (const [mat, r, ox, oy, oz] of lobes) {
     const c = new THREE.Mesh(canopyGeo, mat); c.scale.setScalar(r*s); c.position.set(x + ox*s, oy*s, z + oz*s); scene.add(c);
   }
@@ -1306,7 +1313,7 @@ function dressSite2() {
 
   const trunkM=new THREE.MeshLambertMaterial({color:0x5a4632}), leafA=new THREE.MeshLambertMaterial({color:0x4a7340}), leafB=new THREE.MeshLambertMaterial({color:0x3e6336});
   const trunkGeo=new THREE.CylinderGeometry(0.13,0.19,1.6,8), canopyGeo=new THREE.SphereGeometry(1,10,8);
-  const tree = (x,z,s) => { const tr=new THREE.Mesh(trunkGeo,trunkM); tr.scale.set(s,s,s); tr.position.set(x,0.8*s,z); scene.add(tr); for (const [m,r,ox,oy,oz] of [[leafA,0.95,0,1.8,0],[leafB,0.72,0.45,2.3,-0.25],[leafA,0.62,-0.35,2.4,0.35]]) { const c=new THREE.Mesh(canopyGeo,m); c.scale.setScalar(r*s); c.position.set(x+ox*s,oy*s,z+oz*s); scene.add(c); } };
+  const tree = (x,z,s) => { const tr=new THREE.Mesh(trunkGeo,trunkM); tr.scale.set(s,s,s); tr.position.set(x,0.8*s,z); scene.add(tr); for (const [m,r,ox,oy,oz] of [[leafA,1.05,0,1.95,0],[leafB,0.9,0,2.5,0],[leafA,0.72,0.6,2.1,0.15],[leafB,0.7,-0.55,2.2,-0.2],[leafA,0.66,0.15,2.05,0.55],[leafB,0.6,-0.1,2.85,0.05]]) { const c=new THREE.Mesh(canopyGeo,m); c.scale.setScalar(r*s); c.position.set(x+ox*s,oy*s,z+oz*s); scene.add(c); } };
   tree(-22,-12,1.1); tree(-22,8,1.0); tree(-22,16,1.2); tree(-8,-19,1.0); tree(8,-19,1.1); tree(22,10,1.0);
 }
 
